@@ -1,0 +1,267 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0f7a56">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Novatech">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" href="icon-192.png">
+<title>Novatech</title>
+<style>
+:root{--g:#0f7a56;--g2:#e6f4ee;--t:#17212b;--m:#6b7885;--l:#e3e8ec;--bg:#f3f6f8;--r:#c0392b;--o:#e8590c}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;background:var(--bg);color:var(--t);font:16px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif}
+body{padding-bottom:calc(76px + env(safe-area-inset-bottom))}
+header{position:sticky;top:0;z-index:5;background:var(--g);color:#fff;padding:calc(10px + env(safe-area-inset-top)) 14px 10px;display:flex;align-items:center;gap:10px}
+header h1{font-size:19px;margin:0;flex:1}
+header small{display:block;font-weight:400;font-size:12px;opacity:.85}
+header button{background:rgba(255,255,255,.18);color:#fff;border:0;border-radius:10px;font-size:18px;padding:8px 11px}
+main{padding:12px 12px 20px;max-width:640px;margin:0 auto}
+nav{position:fixed;left:0;right:0;bottom:0;background:#fff;border-top:1px solid var(--l);display:flex;padding-bottom:env(safe-area-inset-bottom);z-index:6}
+nav button{flex:1;border:0;background:none;padding:9px 2px 8px;font-size:11px;color:var(--m);display:grid;gap:1px;justify-items:center}
+nav button span{font-size:22px;line-height:1}
+nav button.on{color:var(--g);font-weight:700}
+nav i{position:absolute;margin:-2px 0 0 18px;background:var(--o);color:#fff;font-style:normal;font-size:10px;font-weight:700;border-radius:9px;padding:1px 5px}
+.card{background:#fff;border-radius:14px;padding:13px 14px;margin:0 0 12px;box-shadow:0 1px 2px rgba(0,0,0,.05)}
+.card h2{font-size:15px;margin:0 0 8px;display:flex;gap:6px;align-items:center}
+.row{display:flex;align-items:center;gap:10px;padding:9px 0;border-top:1px solid var(--l)}
+.row:first-of-type{border-top:0}
+.row .x{flex:1;min-width:0}
+.row .x b,.row .x span{display:block;overflow:hidden;text-overflow:ellipsis}
+.sub{color:var(--m);font-size:13px}
+.btn{border:0;border-radius:12px;background:var(--g);color:#fff;font-size:16px;font-weight:650;padding:12px 16px}
+.btn.s{padding:8px 12px;font-size:14px}
+.btn.o{background:var(--g2);color:var(--g)}
+.btn.w{width:100%}
+.btn:disabled{opacity:.45}
+.pill{display:inline-block;border-radius:20px;padding:2px 9px;font-size:12px;font-weight:650;background:var(--g2);color:var(--g)}
+.pill.a{background:#fff1e6;color:var(--o)}.pill.r{background:#fdecea;color:var(--r)}.pill.m{background:#eef1f4;color:var(--m)}
+input,textarea,select{width:100%;font:inherit;padding:11px 12px;border:1px solid #cfd8de;border-radius:11px;background:#fff;color:var(--t)}
+textarea{min-height:120px;resize:vertical}
+label.c{display:flex;gap:10px;align-items:center}
+input[type=checkbox]{width:22px;height:22px;flex:none;accent-color:var(--g)}
+.chips{display:flex;gap:8px;overflow-x:auto;padding-bottom:6px;margin:0 -2px 8px}
+.chips button{flex:none;border:1px solid #cfd8de;background:#fff;border-radius:22px;padding:9px 14px;font-size:14px;color:var(--t)}
+.chips button.on{background:var(--g);border-color:var(--g);color:#fff;font-weight:650}
+.seg{display:flex;background:#e9eef1;border-radius:11px;padding:3px;margin:6px 0}
+.seg button{flex:1;border:0;background:none;border-radius:9px;padding:9px 4px;font-size:14px;color:var(--m)}
+.seg button.on{background:#fff;color:var(--t);font-weight:650;box-shadow:0 1px 2px rgba(0,0,0,.1)}
+.ov{position:fixed;inset:0;background:rgba(10,20,30,.45);z-index:20;display:flex;align-items:flex-end;justify-content:center}
+.sheet{background:#fff;border-radius:18px 18px 0 0;width:100%;max-width:640px;max-height:90vh;overflow:auto;padding:16px 16px calc(18px + env(safe-area-inset-bottom))}
+.sheet h3{margin:0 0 4px;font-size:19px}
+.prev{white-space:pre-wrap;background:#f3f6f8;border-radius:11px;padding:11px 12px;font-size:14px;margin:8px 0}
+.lock{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
+.lock .card{width:100%;max-width:380px;padding:22px}
+.lock h1{margin:0 0 4px;font-size:24px;color:var(--g)}
+.err{color:var(--r);font-size:14px;min-height:20px;margin:6px 0}
+.empty{color:var(--m);padding:14px 4px;text-align:center}
+.warn{background:#fff7e6;border:1px solid #f5d28b;color:#8a5a00;border-radius:12px;padding:10px 12px;font-size:14px;margin-bottom:12px}
+.big{font-size:19px;font-weight:700}
+.toast{position:fixed;left:50%;bottom:calc(90px + env(safe-area-inset-bottom));transform:translateX(-50%);background:#17212b;color:#fff;padding:10px 16px;border-radius:12px;font-size:14px;z-index:40;max-width:90%}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script>
+'use strict';
+/* ---------- utilità ---------- */
+const $=s=>document.querySelector(s);
+const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const LS={get(k,d){try{const v=localStorage.getItem(k);return v==null?d:JSON.parse(v)}catch(e){return d}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}},raw(k){try{return localStorage.getItem(k)}catch(e){return null}},setRaw(k,v){try{localStorage.setItem(k,v)}catch(e){toast('Memoria piena: non riesco a salvare i dati')}}};
+const pad=n=>String(n).padStart(2,'0');
+const isoOf=d=>d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());
+const todayIso=()=>isoOf(new Date());
+const fmtD=i=>{const p=String(i||'').slice(0,10).split('-');return p.length===3?p[2]+'/'+p[1]+'/'+p[0]:''};
+const eur=n=>Number(n||0).toLocaleString('it-IT',{style:'currency',currency:'EUR'});
+const tc=v=>String(v||'').trim().toLowerCase().replace(/(^|[\s'-])(\S)/g,(m,a,b)=>a+b.toUpperCase());
+const first=n=>tc(String(n||'').trim().split(/\s+/)[0]||'');
+const n9=v=>String(v||'').replace(/\D/g,'').replace(/^(00)?39(?=3\d{8,9}$)/,'').slice(-9);
+function normTel(v){let raw=String(v||'').trim();if(!raw)return'';let plus=raw.startsWith('+');let d=raw.replace(/\D/g,'');if(d.startsWith('00')){d=d.slice(2);plus=true}if(!plus&&!(d.startsWith('39')&&d.length>=11))d='39'+d.replace(/^0+(?=3)/,'');if(d.startsWith('39')&&!/^393\d{8,9}$/.test(d))return'';return d.length>=11&&d.length<=15?'+'+d:''}
+function toast(t){const e=document.createElement('div');e.className='toast';e.textContent=t;document.body.appendChild(e);setTimeout(()=>e.remove(),2600)}
+
+/* ---------- modelli messaggio ---------- */
+const DEF={
+ auguri:'Buon compleanno {nome}! 🎂 Tanti auguri da tutto il team Novatech.',
+ scad:'Buongiorno {nome}, la sua offerta {offerta} è in scadenza. Passi da Novatech (Via G. Oberdan 1/E, Gorizia) o ci scriva al 327 593 8112: abbiamo nuove offerte per lei!',
+ rip:'Buongiorno {nome}, il suo {dispositivo} è pronto per il ritiro presso Novatech (Via G. Oberdan 1/E, Gorizia).{importo} Siamo aperti lun-ven 9:30-12:30 e 15:00-18:30. Grazie!',
+ ric:'Buongiorno {nome}, ecco la ricevuta del suo acquisto da Novatech:\n\n{ricevuta}',
+ libero:'Buongiorno {nome}, '
+};
+const TIPI=[['auguri','🎂','Auguri'],['scad','⏰','Offerta in scadenza'],['rip','🛠️','Riparazione pronta'],['ric','🧾','Ricevuta'],['libero','✏️','Messaggio libero']];
+const tpl=k=>(LS.get('nt_tpl',{})[k])||DEF[k];
+function fill(t,r,grp){let o=String(t);const v=Object.assign({nome:grp?'':first(r.nome)},r.vars||{});for(const k in v)o=o.split('{'+k+'}').join(v[k]);if(!v.nome)o=o.replace(/ \{nome\}/g,'').replace(/\{nome\}/g,'').replace(/Buongiorno ,/g,'Buongiorno,');return o.replace(/ {2,}/g,' ').replace(/ ,/g,',')}
+
+/* ---------- cifratura (stesso formato del gestionale) ---------- */
+const b2u=t=>Uint8Array.from(atob(t),c=>c.charCodeAt(0));
+async function decrypt(text,pw){const o=JSON.parse(text);if(!o||!o.__enc)throw Error('File non valido');const m=await crypto.subtle.importKey('raw',new TextEncoder().encode(pw),'PBKDF2',false,['deriveKey']);const key=await crypto.subtle.deriveKey({name:'PBKDF2',salt:b2u(o.salt),iterations:o.iter||250000,hash:'SHA-256'},m,{name:'AES-GCM',length:256},false,['decrypt']);const pl=await crypto.subtle.decrypt({name:'AES-GCM',iv:b2u(o.iv)},key,b2u(o.ct));return JSON.parse(new TextDecoder().decode(pl))}
+
+/* ---------- stato ---------- */
+let D=null,tab='oggi',locked=true,msg={tipo:null,sel:{},text:'',mode:'uno',ch:'sms',q:'',manual:''},cq='',queue=null,hiddenAt=0;
+const sent=()=>LS.get('nt_sent',{});
+function markSent(key){const s=sent();s[key]=Date.now();LS.set('nt_sent',s)}
+const isSent=key=>sent()[key];
+const sentTxt=key=>{const t=isSent(key);return t?'✓ '+fmtD(isoOf(new Date(t))):''};
+
+/* ---------- destinatari per tipo ---------- */
+function recipients(tipo){
+ const today=new Date(),tm=today.getMonth()+1,td=today.getDate(),yr=today.getFullYear(),iso=todayIso();
+ if(tipo==='auguri'){
+  const out=[];for(let off=0;off<=7;off++){const d=new Date(today.getFullYear(),today.getMonth(),today.getDate()+off);
+   for(const c of D.comp)if(c.m===d.getMonth()+1&&c.g===d.getDate())out.push({id:'a|'+c.k+'|'+d.getFullYear(),nome:c.n,tel:c.t,info:off===0?'Oggi':off===1?'Domani':'tra '+off+' giorni',due:off===0,vars:{}})}
+  return out}
+ if(tipo==='scad'){const lim=isoOf(new Date(today.getFullYear(),today.getMonth(),today.getDate()+30));
+  return D.scad.map(x=>({id:'s|'+x.k+'|'+x.d,nome:x.n,tel:x.t,info:(x.late?'scaduta ':'scade ')+fmtD(x.d)+' · '+x.tipo+' '+x.op,due:x.d<=lim,vars:{offerta:(x.tipo+' '+x.op).trim()}}))}
+ if(tipo==='rip')return D.rip.filter(x=>x.st==='pronto').map(x=>({id:'r|'+x.id+'|'+x.pronto,nome:x.n,tel:x.t,info:x.disp+(x.pronto?' · pronto il '+fmtD(x.pronto):''),due:true,vars:{dispositivo:x.disp||'dispositivo',importo:x.prezzo>0?' Importo: '+eur(x.prezzo)+'.':''}}));
+ if(tipo==='ric')return D.ric.map(x=>({id:'c|'+x.id,nome:x.n||nameByTel(x.t),tel:x.t,info:fmtD(x.date)+' '+x.time+' · '+eur(x.tot),due:false,vars:{ricevuta:x.testo}}));
+ if(tipo==='libero'){const q=msg.q.trim().toLowerCase(),dq=q.replace(/\D/g,'');let l=D.clienti.filter(c=>c.t);if(q)l=l.filter(c=>c.n.toLowerCase().includes(q)||(dq.length>=3&&c.t.replace(/\D/g,'').includes(dq)));
+  const out=l.slice(0,40).map(c=>({id:'l|'+n9(c.t)+c.n,nome:c.n,tel:c.t,info:c.t,due:false,vars:{}}));
+  for(const k in msg.sel)if(msg.sel[k]&&msg.sel[k].extra&&!out.find(o=>o.id===k))out.unshift(msg.sel[k].extra);
+  return out}
+ return[]}
+function nameByTel(t){const k=n9(t);const c=k.length>=8&&D.clienti.find(c=>n9(c.t)===k);return c?c.n:''}
+
+/* ---------- invio ---------- */
+function smsHref(tels,body){return 'sms:'+tels.join(',')+'?&body='+encodeURIComponent(body)}
+function waHref(tel,body){return 'https://wa.me/'+tel.replace(/\D/g,'')+'?text='+encodeURIComponent(body)}
+function openLink(h){const a=document.createElement('a');a.href=h;a.target='_blank';a.rel='noopener';document.body.appendChild(a);a.click();a.remove()}
+function sendOne(r,text,ch,key){const tel=normTel(r.tel);if(!tel){toast('Manca un numero valido');return false}if(key)markSent(key);if(ch==='wa')openLink(waHref(tel,text));else location.href=smsHref([tel],text);return true}
+
+/* ---------- schermata blocco ---------- */
+function showLock(err){
+ locked=true;D=null;queue=null;
+ const has=!!LS.raw('nt_enc');
+ $('#app').innerHTML=`<div class="lock"><div class="card"><h1>Novatech</h1><div class="sub" style="margin-bottom:14px">${has?'Inserisci la password per aprire i dati.':'Prima volta: carica il file dei dati creato dal gestionale (Novatech-telefono.dat).'}</div>
+ ${has?`<input id="pw" type="password" placeholder="Password" autocomplete="current-password" enterkeyhint="go"><div class="err" id="er">${esc(err||'')}</div><button class="btn w" id="go">Apri</button><div style="height:12px"></div><button class="btn o w" id="newf">Carica un file nuovo</button>`:`<div class="err" id="er">${esc(err||'')}</div><button class="btn w" id="newf">Scegli il file</button>`}
+ <input id="fl" type="file" style="display:none"></div></div>`;
+ const fl=$('#fl');$('#newf').onclick=()=>fl.click();
+ fl.onchange=async()=>{const f=fl.files[0];if(!f)return;const t=await f.text();try{const o=JSON.parse(t);if(!o.__enc)throw 0;LS.setRaw('nt_enc',t);LS.set('nt_file',{name:f.name,at:Date.now()});showLock('')}catch(e){$('#er').textContent='Questo file non è quello giusto.'}};
+ if(has){const go=async()=>{const pw=$('#pw').value;if(!pw)return;$('#go').disabled=true;$('#er').textContent='Controllo…';try{D=await decrypt(LS.raw('nt_enc'),pw);locked=false;tab='oggi';draw()}catch(e){await new Promise(r=>setTimeout(r,800));showLock('Password errata')}};$('#go').onclick=go;$('#pw').onkeydown=e=>{if(e.key==='Enter')go()};if(!err)setTimeout(()=>$('#pw')&&$('#pw').focus(),100)}
+}
+
+/* ---------- disegno ---------- */
+const TABS=[['oggi','🏠','Oggi'],['msg','✉️','Messaggi'],['clienti','👥','Clienti'],['rip','🛠️','Riparazioni'],['ric','🧾','Ricevute']];
+function badges(){const t=new Date(),iso=todayIso();const b=D.comp.filter(c=>c.m===t.getMonth()+1&&c.g===t.getDate()&&!isSent('a|'+c.k+'|'+t.getFullYear())).length,r=D.rip.filter(x=>x.st==='pronto'&&!isSent('r|'+x.id+'|'+x.pronto)).length;return{oggi:b+r}}
+function draw(){
+ if(locked||!D)return;
+ const bd=badges(),age=(Date.now()-new Date(D.at).getTime())/86400000;
+ $('#app').innerHTML=`<header><h1>Novatech<small>Dati del ${fmtD(isoOf(new Date(D.at)))} alle ${new Date(D.at).toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'})}</small></h1><button id="bSet">⚙️</button><button id="bLock">🔒</button></header><main id="main"></main><nav>${TABS.map(([k,i,t])=>`<button data-t="${k}" class="${tab===k?'on':''}"><span>${i}</span>${t}${bd[k]?`<i>${bd[k]}</i>`:''}</button>`).join('')}</nav>`;
+ $('#bLock').onclick=()=>showLock('');$('#bSet').onclick=settings;
+ document.querySelectorAll('nav [data-t]').forEach(b=>b.onclick=()=>{tab=b.dataset.t;if(tab==='msg'&&!msg.tipo)pickTipo('libero');draw();scrollTo(0,0)});
+ const m=$('#main');if(age>2)m.insertAdjacentHTML('beforeend',`<div class="warn">⚠️ I dati sono vecchi di ${Math.floor(age)} giorni. Dal gestionale aggiorna il file e poi qui: ⚙️ → Aggiorna dati.</div>`);
+ ({oggi:vOggi,msg:vMsg,clienti:vClienti,rip:vRip,ric:vRic})[tab](m)}
+
+function vOggi(m){
+ const t=new Date(),yr=t.getFullYear(),bo=D.comp.filter(c=>c.m===t.getMonth()+1&&c.g===t.getDate()),rp=D.rip.filter(x=>x.st==='pronto'),sc=D.scad.filter(x=>x.late),rc=D.ric.filter(x=>x.date===todayIso());
+ let h='';
+ h+=`<div class="card"><h2>🎂 Compleanni di oggi <span class="pill m">${bo.length}</span></h2>${bo.length?bo.map(c=>{const k='a|'+c.k+'|'+yr;return `<div class="row"><div class="x"><b>${esc(c.n)}</b><span class="sub">${esc(c.t)||'senza numero'} ${sentTxt(k)}</span></div>${c.t?`<button class="btn s ${isSent(k)?'o':''}" data-act="auguri" data-k="${esc(c.k)}">${isSent(k)?'Reinvia':'Auguri'}</button>`:''}</div>`}).join(''):'<div class="empty">Nessun compleanno oggi.</div>'}</div>`;
+ h+=`<div class="card"><h2>🛠️ Riparazioni pronte <span class="pill m">${rp.length}</span></h2>${rp.length?rp.map(x=>{const k='r|'+x.id+'|'+x.pronto;return `<div class="row"><div class="x"><b>${esc(x.n)}</b><span class="sub">${esc(x.disp)} ${sentTxt(k)}</span></div><button class="btn s ${isSent(k)?'o':''}" data-act="rip" data-id="${esc(x.id)}">${isSent(k)?'Reinvia':'Avvisa'}</button></div>`}).join(''):'<div class="empty">Nessun telefono pronto da riconsegnare.</div>'}</div>`;
+ h+=`<div class="card"><h2>⏰ Offerte scadute da ricontattare <span class="pill ${sc.length?'a':'m'}">${sc.length}</span></h2>${sc.length?`<div class="sub" style="margin-bottom:8px">Fibra/FWA dopo 18 mesi, luce e gas dopo 12.</div><button class="btn o w" data-act="gotoScad">Vedi l'elenco e scrivi</button>`:'<div class="empty">Nessuna offerta scaduta.</div>'}</div>`;
+ h+=`<div class="card"><h2>🧾 Ricevute di oggi <span class="pill m">${rc.length}</span></h2>${rc.length?rc.slice(0,5).map(x=>`<div class="row"><div class="x"><b>${esc(x.n||nameByTel(x.t)||'Cliente')}</b><span class="sub">${esc(x.time)} · ${eur(x.tot)}</span></div><button class="btn s o" data-act="ricOpen" data-id="${esc(x.id)}">Apri</button></div>`).join(''):'<div class="empty">Ancora nessuna vendita oggi.</div>'}</div>`;
+ m.insertAdjacentHTML('beforeend',h);bind(m)}
+
+function pickTipo(t){msg.tipo=t;msg.sel={};msg.q='';msg.manual='';msg.text=tpl(t);if(t!=='libero'||true){const r=recipients(t);if(t!=='libero')r.forEach(x=>{if(x.due&&x.tel&&!isSent(x.id))msg.sel[x.id]={r:x}})}}
+function vMsg(m){
+ const t=msg.tipo,rs=recipients(t),selIds=Object.keys(msg.sel).filter(k=>msg.sel[k]),selR=selIds.map(k=>msg.sel[k].r||msg.sel[k].extra).filter(Boolean);
+ let h=`<div class="chips">${TIPI.map(([k,i,n])=>`<button data-tp="${k}" class="${t===k?'on':''}">${i} ${n}</button>`).join('')}</div>`;
+ h+=`<div class="card"><h2>1 · A chi</h2>`;
+ if(t==='libero')h+=`<input id="mq" placeholder="Cerca nome o numero" value="${esc(msg.q)}"><div style="display:flex;gap:8px;margin:8px 0"><input id="mnum" placeholder="…oppure scrivi un numero" inputmode="tel" value="${esc(msg.manual)}"><button class="btn s" id="madd">Aggiungi</button></div>`;
+ h+=rs.length?rs.map(r=>{const ok=!!normTel(r.tel),on=!!msg.sel[r.id],st=sentTxt(r.id);return `<label class="row c" style="${ok?'':'opacity:.5'}"><input type="checkbox" data-rc="${esc(r.id)}" ${on?'checked':''} ${ok?'':'disabled'}><div class="x"><b>${esc(r.nome||'(senza nome)')}</b><span class="sub">${esc(r.info)}${ok?'':' · numero mancante'}</span></div>${st?`<span class="pill m">${st}</span>`:''}</label>`}).join(''):`<div class="empty">${t==='libero'?'Nessun cliente trovato.':'Niente da mostrare qui.'}</div>`;
+ h+=`</div><div class="card"><h2>2 · Testo</h2><textarea id="mt">${esc(msg.text)}</textarea><div class="sub" style="margin:6px 0">Puoi usare <b>{nome}</b> (nome del cliente).${t==='libero'?'':' Il testo vale solo per questo invio.'}</div><div style="display:flex;gap:8px"><button class="btn s o" id="mSave">Salva come modello</button><button class="btn s o" id="mReset">Ripristina</button></div>`;
+ if(selR[0])h+=`<div class="sub" style="margin-top:10px">Anteprima per ${esc(selR[0].nome||'il primo')}:</div><div class="prev">${esc(fill(msg.text,selR[0],false))}</div>`;
+ h+=`</div><div class="card"><h2>3 · Come invio</h2><div class="sub">Il telefono apre il messaggio già scritto: tu premi Invia.</div><div class="seg"><button data-md="uno" class="${msg.mode==='uno'?'on':''}">Uno per uno</button><button data-md="tutti" class="${msg.mode==='tutti'?'on':''}">Tutti insieme</button></div>`;
+ if(msg.mode==='uno')h+=`<div class="seg"><button data-ch="sms" class="${msg.ch==='sms'?'on':''}">SMS / iMessage</button><button data-ch="wa" class="${msg.ch==='wa'?'on':''}">WhatsApp</button></div><div class="sub">Ogni cliente riceve il suo messaggio col suo nome.</div>`;
+ else h+=`<div class="warn" style="margin:8px 0 0">Un solo messaggio a tutti: senza il nome. Con più destinatari il telefono può creare una chat di gruppo e i clienti vedrebbero i numeri degli altri: prova prima con due tuoi numeri.</div>`;
+ h+=`<button class="btn w" id="mGo" style="margin-top:12px" ${selR.length?'':'disabled'}>${msg.mode==='uno'?'Inizia l’invio':'Prepara il messaggio'} (${selR.length})</button></div>`;
+ m.insertAdjacentHTML('beforeend',h);
+ m.querySelectorAll('[data-tp]').forEach(b=>b.onclick=()=>{keepText();pickTipo(b.dataset.tp);draw()});
+ m.querySelectorAll('[data-rc]').forEach(c=>c.onchange=()=>{keepText();const r=rs.find(x=>x.id===c.dataset.rc);if(c.checked)msg.sel[r.id]={r};else delete msg.sel[r.id];draw()});
+ m.querySelectorAll('[data-md]').forEach(b=>b.onclick=()=>{keepText();msg.mode=b.dataset.md;draw()});
+ m.querySelectorAll('[data-ch]').forEach(b=>b.onclick=()=>{keepText();msg.ch=b.dataset.ch;draw()});
+ const mq=$('#mq');if(mq){mq.oninput=()=>{keepText();msg.q=mq.value;clearTimeout(vMsg.tm);vMsg.tm=setTimeout(()=>{draw();const e=$('#mq');if(e){e.focus();e.setSelectionRange(e.value.length,e.value.length)}},300)}}
+ const ma=$('#madd');if(ma)ma.onclick=()=>{keepText();const n=normTel($('#mnum').value);if(!n){toast('Numero non valido');return}const r={id:'l|man|'+n,nome:'',tel:n,info:n,due:false,vars:{}};msg.sel[r.id]={r,extra:r};msg.manual='';draw()};
+ $('#mSave').onclick=()=>{keepText();const s=LS.get('nt_tpl',{});s[t]=msg.text;LS.set('nt_tpl',s);toast('Modello salvato')};
+ $('#mReset').onclick=()=>{const s=LS.get('nt_tpl',{});delete s[t];LS.set('nt_tpl',s);msg.text=DEF[t];draw()};
+ $('#mGo').onclick=()=>{keepText();if(!msg.text.trim()){toast('Scrivi il testo');return}startSend(selR)}}
+function keepText(){const e=$('#mt');if(e)msg.text=e.value;const n=$('#mnum');if(n)msg.manual=n.value}
+
+function startSend(list){
+ const items=list.filter(r=>normTel(r.tel));
+ if(!items.length)return;
+ if(msg.mode==='tutti'){const body=fill(msg.text,items[0],true),tels=items.map(r=>normTel(r.tel));items.forEach(r=>markSent(r.id));location.href=smsHref(tels,body);setTimeout(()=>draw(),600);return}
+ queue={items,i:0,ch:msg.ch,text:msg.text};drawQueue()}
+function drawQueue(){
+ document.getElementById('qov')?.remove();if(!queue)return;
+ const q=queue,done=q.i>=q.items.length,r=q.items[q.i];
+ const o=document.createElement('div');o.className='ov';o.id='qov';
+ o.innerHTML=`<div class="sheet">${done?`<h3>Fatto ✓</h3><p class="sub">Hai passato tutti i messaggi (${q.items.length}).</p><button class="btn w" id="qx">Chiudi</button>`:`<div class="sub">Messaggio ${q.i+1} di ${q.items.length}</div><h3>${esc(r.nome||r.tel)}</h3><div class="sub">${esc(normTel(r.tel))}</div><div class="prev">${esc(fill(q.text,r,false))}</div><button class="btn w" id="qgo">${q.ch==='wa'?'Apri WhatsApp':'Apri messaggio'} →</button><div style="display:flex;gap:8px;margin-top:10px"><button class="btn o" style="flex:1" id="qskip">Salta</button><button class="btn o" style="flex:1" id="qx">Interrompi</button></div><div class="sub" style="margin-top:10px">Nel messaggio premi Invia, poi torna qui: comparirà il prossimo cliente.</div>`}</div>`;
+ document.body.appendChild(o);
+ $('#qx').onclick=()=>{queue=null;o.remove();draw()};
+ if(!done){$('#qskip').onclick=()=>{q.i++;drawQueue()};$('#qgo').onclick=()=>{const ok=sendOne(r,fill(q.text,r,false),q.ch,r.id);if(ok){q.i++;setTimeout(drawQueue,500)}}}}
+
+function vClienti(m){
+ const q=cq.trim().toLowerCase(),dq=q.replace(/\D/g,'');let l=D.clienti;if(q)l=l.filter(c=>c.n.toLowerCase().includes(q)||(dq.length>=3&&c.t.replace(/\D/g,'').includes(dq)));
+ m.insertAdjacentHTML('beforeend',`<input id="cq" placeholder="Cerca per nome o numero" value="${esc(cq)}" style="margin-bottom:10px"><div class="sub" style="margin:0 2px 8px">${l.length} clienti${l.length>60?' (mostro i primi 60)':''}</div><div class="card" style="padding:4px 14px">${l.slice(0,60).map(c=>`<div class="row" data-cl="${D.clienti.indexOf(c)}"><div class="x"><b>${esc(c.n)}</b><span class="sub">${esc(c.t)||'senza numero'}${c.a[0]?' · '+esc(c.a[0][1])+' '+fmtD(c.a[0][0]):''}</span></div><span class="sub">›</span></div>`).join('')||'<div class="empty">Nessun cliente trovato.</div>'}</div>`);
+ const e=$('#cq');e.oninput=()=>{cq=e.value;clearTimeout(vClienti.tm);vClienti.tm=setTimeout(()=>{draw();const x=$('#cq');x.focus();x.setSelectionRange(x.value.length,x.value.length)},250)};
+ m.querySelectorAll('[data-cl]').forEach(r=>r.onclick=()=>clienteSheet(D.clienti[+r.dataset.cl]))}
+function sheet(html){document.getElementById('sov')?.remove();const o=document.createElement('div');o.className='ov';o.id='sov';o.innerHTML='<div class="sheet">'+html+'</div>';o.onclick=e=>{if(e.target===o)o.remove()};document.body.appendChild(o);return o}
+function clienteSheet(c){
+ const k=n9(c.t),tel=normTel(c.t),rp=D.rip.filter(x=>k.length>=8&&n9(x.t)===k),sc=D.scad.filter(x=>k.length>=8&&n9(x.t)===k);
+ const o=sheet(`<h3>${esc(c.n)}</h3><div class="sub">${esc(c.t)||'senza numero'}</div>
+ ${tel?`<div style="display:flex;gap:8px;margin:12px 0"><a class="btn o" style="flex:1;text-align:center;text-decoration:none" href="tel:${tel}">📞 Chiama</a><button class="btn o" style="flex:1" id="cSms">✉️ Scrivi</button><a class="btn o" style="flex:1;text-align:center;text-decoration:none" target="_blank" rel="noopener" href="https://wa.me/${tel.replace('+','')}">WhatsApp</a></div>`:''}
+ <h2 style="font-size:15px;margin:14px 0 4px">Ultime attivazioni</h2>${c.a.length?c.a.map(a=>`<div class="row"><div class="x"><b>${esc(a[1])} ${esc(a[2])}</b><span class="sub">${fmtD(a[0])}${a[3]?' · '+esc(a[3]):''}${a[4]?' · '+esc(a[4]):''}</span></div></div>`).join(''):'<div class="sub">Nessuna.</div>'}
+ ${sc.length?`<h2 style="font-size:15px;margin:14px 0 4px">Scadenze</h2>${sc.map(x=>`<div class="row"><div class="x"><b>${esc(x.tipo)} ${esc(x.op)}</b><span class="sub">${x.late?'scaduta':'scade'} il ${fmtD(x.d)}</span></div></div>`).join('')}`:''}
+ ${rp.length?`<h2 style="font-size:15px;margin:14px 0 4px">Riparazioni</h2>${rp.map(x=>`<div class="row"><div class="x"><b>${esc(x.disp)}</b><span class="sub">${fmtD(x.data)} · ${esc(x.guasto)}</span></div><span class="pill ${x.st==='pronto'?'':'m'}">${x.st}</span></div>`).join('')}`:''}
+ <button class="btn o w" style="margin-top:14px" id="cClose">Chiudi</button>`);
+ $('#cClose').onclick=()=>o.remove();
+ const s=$('#cSms');if(s)s.onclick=()=>{o.remove();tab='msg';msg.tipo='libero';msg.sel={};msg.q='';msg.text=tpl('libero');const r={id:'l|'+n9(c.t)+c.n,nome:c.n,tel:c.t,info:c.t,due:false,vars:{}};msg.sel[r.id]={r,extra:r};msg.q=c.n;draw();scrollTo(0,0)}}
+
+function vRip(m){
+ const g=(st)=>D.rip.filter(x=>x.st===st),sec=(t,l,btn)=>`<div class="card"><h2>${t} <span class="pill m">${l.length}</span></h2>${l.length?l.map(x=>{const k='r|'+x.id+'|'+x.pronto;return `<div class="row"><div class="x"><b>${esc(x.n)} · ${esc(x.disp)}</b><span class="sub">${esc(x.guasto)} · ${fmtD(x.data)}${x.prezzo?' · '+eur(x.prezzo):''} ${btn?sentTxt(k):''}</span></div>${btn&&x.t?`<button class="btn s ${isSent(k)?'o':''}" data-act="rip" data-id="${esc(x.id)}">${isSent(k)?'Reinvia':'Avvisa'}</button>`:''}</div>`}).join(''):'<div class="empty">Nessuna.</div>'}</div>`;
+ m.insertAdjacentHTML('beforeend',sec('✅ Pronte da riconsegnare',g('pronto'),true)+sec('🔧 In lavorazione',g('lavorazione'),false)+sec('📦 Ritirate (ultimi 30 giorni)',g('ritirato'),false));bind(m)}
+
+function vRic(m){
+ m.insertAdjacentHTML('beforeend',`<div class="sub" style="margin:0 2px 8px">Vendite degli ultimi 60 giorni. Tocca per inviare la ricevuta al cliente.</div><div class="card" style="padding:4px 14px">${D.ric.map(x=>`<div class="row" data-rc2="${esc(x.id)}"><div class="x"><b>${esc(x.n||nameByTel(x.t)||'Cliente')}</b><span class="sub">${fmtD(x.date)} ${esc(x.time)} · ${esc(x.t)||'senza numero'} ${sentTxt('c|'+x.id)}</span></div><b>${eur(x.tot)}</b></div>`).join('')||'<div class="empty">Nessuna vendita.</div>'}</div>`);
+ m.querySelectorAll('[data-rc2]').forEach(r=>r.onclick=()=>ricSheet(r.dataset.rc2))}
+function ricSheet(id){
+ const x=D.ric.find(v=>v.id===id);if(!x)return;
+ const o=sheet(`<h3>Ricevuta · ${eur(x.tot)}</h3><div class="sub">${fmtD(x.date)} ${esc(x.time)}</div><div class="prev">${esc(x.testo)}</div><div class="sub" style="margin:8px 0 4px">Numero del cliente</div><input id="rt" type="tel" inputmode="tel" value="${esc(x.t)}" placeholder="Numero di telefono"><div style="display:flex;gap:8px;margin-top:12px"><button class="btn" style="flex:1" id="rSms">✉️ Invia SMS</button><button class="btn o" style="flex:1" id="rSh">Condividi</button></div><button class="btn o w" style="margin-top:10px" id="rCp">Copia testo</button><button class="btn o w" style="margin-top:10px" id="rX">Chiudi</button>`);
+ const body=()=>fill(tpl('ric'),{nome:x.n||nameByTel(x.t),vars:{ricevuta:x.testo}},false);
+ $('#rX').onclick=()=>o.remove();
+ $('#rSms').onclick=()=>{const r={nome:x.n,tel:$('#rt').value};if(sendOne(r,body(),'sms','c|'+x.id))setTimeout(()=>{o.remove();draw()},500)};
+ $('#rSh').onclick=async()=>{try{if(navigator.share){await navigator.share({text:x.testo});markSent('c|'+x.id)}else toast('Condivisione non disponibile: usa Copia')}catch(e){}};
+ $('#rCp').onclick=async()=>{try{await navigator.clipboard.writeText(x.testo);toast('Copiato')}catch(e){toast('Non riesco a copiare')}}}
+
+/* ---------- azioni dalle schede ---------- */
+function bind(m){m.querySelectorAll('[data-act]').forEach(b=>b.onclick=()=>{const a=b.dataset.act;
+ if(a==='auguri'){const c=D.comp.find(v=>v.k===b.dataset.k),yr=new Date().getFullYear();const r={id:'a|'+c.k+'|'+yr,nome:c.n,tel:c.t,vars:{}};if(sendOne(r,fill(tpl('auguri'),r,false),'sms',r.id))setTimeout(draw,500)}
+ else if(a==='rip'){const x=D.rip.find(v=>v.id===b.dataset.id),r=recipients('rip').find(v=>v.id==='r|'+x.id+'|'+x.pronto)||{nome:x.n,tel:x.t,vars:{dispositivo:x.disp,importo:x.prezzo>0?' Importo: '+eur(x.prezzo)+'.':''}};if(sendOne(r,fill(tpl('rip'),r,false),'sms','r|'+x.id+'|'+x.pronto))setTimeout(draw,500)}
+ else if(a==='gotoScad'){tab='msg';pickTipo('scad');draw();scrollTo(0,0)}
+ else if(a==='ricOpen')ricSheet(b.dataset.id)})}
+
+/* ---------- impostazioni ---------- */
+function settings(){
+ const f=LS.get('nt_file',null);
+ const o=sheet(`<h3>Impostazioni</h3><div class="sub">File dati: ${f?esc(f.name)+' · caricato il '+fmtD(isoOf(new Date(f.at))):'—'}</div>
+ <button class="btn w" style="margin-top:12px" id="sUp">Aggiorna dati (scegli il file)</button><input id="sFl" type="file" style="display:none">
+ <h2 style="font-size:15px;margin:18px 0 4px">Modelli dei messaggi</h2><div class="sub">Qui cambi i testi che compaiono già pronti. Usa {nome}, {offerta}, {dispositivo}, {importo}, {ricevuta}.</div>
+ ${TIPI.map(([k,i,n])=>`<div class="sub" style="margin:10px 0 4px"><b>${i} ${n}</b></div><textarea data-tp2="${k}" style="min-height:90px">${esc(tpl(k))}</textarea>`).join('')}
+ <button class="btn w" style="margin-top:12px" id="sSave">Salva modelli</button><button class="btn o w" style="margin-top:10px" id="sRes">Ripristina tutti i testi originali</button>
+ <button class="btn o w" style="margin-top:10px" id="sX">Chiudi</button>
+ <div class="sub" style="margin-top:14px">L’app si blocca da sola dopo 5 minuti che non la usi.</div>`);
+ $('#sX').onclick=()=>o.remove();
+ $('#sUp').onclick=()=>$('#sFl').click();
+ $('#sFl').onchange=async()=>{const fl=$('#sFl').files[0];if(!fl)return;const t=await fl.text();try{const j=JSON.parse(t);if(!j.__enc)throw 0;LS.setRaw('nt_enc',t);LS.set('nt_file',{name:fl.name,at:Date.now()});o.remove();showLock('')}catch(e){toast('Questo file non è quello giusto')}};
+ $('#sSave').onclick=()=>{const s={};o.querySelectorAll('[data-tp2]').forEach(t=>{if(t.value.trim()&&t.value!==DEF[t.dataset.tp2])s[t.dataset.tp2]=t.value});LS.set('nt_tpl',s);msg.text=tpl(msg.tipo||'libero');toast('Salvato');o.remove();draw()};
+ $('#sRes').onclick=()=>{LS.set('nt_tpl',{});msg.text=tpl(msg.tipo||'libero');toast('Ripristinati');o.remove();draw()}}
+
+/* ---------- blocco automatico ---------- */
+document.addEventListener('visibilitychange',()=>{if(document.hidden)hiddenAt=Date.now();else if(!locked&&hiddenAt&&Date.now()-hiddenAt>5*60*1000)showLock('')});
+setInterval(()=>{if(!locked&&hiddenAt&&document.hidden&&Date.now()-hiddenAt>5*60*1000)showLock('')},30000);
+if('serviceWorker' in navigator&&location.protocol.startsWith('http'))navigator.serviceWorker.register('sw.js').catch(()=>{});
+showLock('');
+</script>
+</body>
+</html>
