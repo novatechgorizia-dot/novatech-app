@@ -185,9 +185,10 @@ function vMsg(m){
  h+=rs.length?rs.map(r=>{const ok=!!normTel(r.tel),on=!!msg.sel[r.id],st=sentTxt(r.id);return `<label class="row c" style="${ok?'':'opacity:.5'}"><input type="checkbox" data-rc="${esc(r.id)}" ${on?'checked':''} ${ok?'':'disabled'}><div class="x"><b>${esc(r.nome||'(senza nome)')}</b><span class="sub">${esc(r.info)}${ok?'':' · cellulare mancante'}</span></div>${st?`<span class="pill m">${st}</span>`:''}</label>`}).join(''):`<div class="empty">${t==='libero'?'Nessun cliente con cellulare.':'Niente da inviare adesso.'}</div>`;
  h+=`</div><div class="card"><h2>2 · Testo</h2><textarea id="mt">${esc(msg.text)}</textarea><div class="sub" style="margin:6px 0">Puoi usare <b>{nome}</b> (nome del cliente) e <b>{negozio}</b>.</div><div style="display:flex;gap:8px"><button class="btn s o" id="mSave">Salva come modello</button><button class="btn s o" id="mReset">Ripristina</button></div>`;
  if(selR[0])h+=`<div class="sub" style="margin-top:10px">Anteprima per ${esc(selR[0].nome||'il primo')}:</div><div class="prev">${esc(fill(msg.text,selR[0],false))}</div>`;
- h+=`</div><div class="card"><h2>3 · Come invio</h2><div class="sub">Il telefono apre il messaggio già scritto: tu premi Invia.</div><div class="seg"><button data-md="uno" class="${msg.mode==='uno'?'on':''}">Uno per uno</button><button data-md="tutti" class="${msg.mode==='tutti'?'on':''}">Tutti insieme</button></div>`;
- if(msg.mode==='uno')h+=`<div class="seg"><button data-ch="sms" class="${msg.ch==='sms'?'on':''}">SMS</button><button data-ch="wa" class="${msg.ch==='wa'?'on':''}">WhatsApp</button></div><div class="sub">Ogni cliente riceve il suo messaggio col suo nome.</div>`;
- else h+=`<div class="warn" style="margin:8px 0 0">Un solo messaggio a tutti, senza il nome. Con più destinatari alcuni telefoni creano una chat di gruppo e i clienti vedrebbero i numeri degli altri: prova prima con due tuoi numeri.</div>`;
+ h+=`</div><div class="card"><h2>3 · Come invio</h2><div class="sub">Il telefono apre il messaggio già scritto: tu premi Invia.</div>`;
+ msg.mode='uno';
+ if(msg.mode==='uno')h+=`<div class="seg"><button data-ch="sms" class="${msg.ch==='sms'?'on':''}">SMS</button><button data-ch="wa" class="${msg.ch==='wa'?'on':''}">WhatsApp</button></div><div class="sub">Un messaggio alla volta: ogni cliente riceve il suo, col suo nome, e nessuno vede i numeri degli altri.</div>`;
+
  h+=`<button class="btn w" id="mGo" style="margin-top:12px" ${selR.length?'':'disabled'}>${msg.mode==='uno'?'Inizia l’invio':'Prepara il messaggio'} (${selR.length})</button></div>`;
  m.insertAdjacentHTML('beforeend',h);
  m.querySelectorAll('[data-tp]').forEach(b=>b.onclick=()=>{keepText();pickTipo(b.dataset.tp);draw()});
