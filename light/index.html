@@ -218,6 +218,7 @@ function draw(){
 function vOggi(m){
  const bo=bdays(0);let h='';
  if(!S.clienti.length)h+=`<div class="card"><h2>👋 Benvenuto</h2><div class="sub" style="margin-bottom:10px">Comincia inserendo i tuoi clienti: poi aggiungi le schede e l’app ti ricorda chi avvisare.</div><button class="btn w" data-act="newCli">＋ Aggiungi il primo cliente</button></div>`;
+ const lastBk=LS.get('ac_bk',0);if(S.clienti.length&&Date.now()-lastBk>7*864e5)h+=`<div class="card"><h2>💾 Copia di sicurezza</h2><div class="sub" style="margin-bottom:10px">${lastBk?'Ultima copia: '+fmtD(isoOf(new Date(lastBk)))+'.':'Non hai ancora salvato nessuna copia.'} I dati stanno solo su questo telefono: salvane una ogni tanto (serve anche per cambiare telefono).</div><button class="btn w" data-act="backup">Salva ora</button></div>`;
  h+=`<div class="card"><h2>🎂 Compleanni di oggi <span class="pill m">${bo.length}</span></h2>${bo.length?bo.map(b=>`<div class="row"><div class="x"><b>${esc(b.c.nome)}</b><span class="sub">${esc(b.c.tel)||'senza numero'} ${sentTxt(b.key)}</span></div>${b.c.tel?`<button class="btn s ${isSent(b.key)?'o':''}" data-act="auguri" data-id="${b.c.id}">${isSent(b.key)?'Reinvia':'Auguri'}</button>`:''}</div>`).join(''):'<div class="empty">Nessun compleanno oggi.</div>'}</div>`;
  for(const t of S.tipi){const l=dueItems(t);h+=`<div class="card"><h2>${esc(t.icona||'📄')} ${esc(t.nome)} · ${t.modo==='lavoro'?'pronti da riconsegnare':'da ricontattare'} <span class="pill ${l.length&&t.modo==='scadenza'?'a':'m'}">${l.length}</span></h2>${l.length?l.slice(0,6).map(o=>{const c=cli(o.x.cid);return `<div class="row"><div class="x"><b>${esc(c.nome)}</b><span class="sub">${esc(o.info)} ${sentTxt(o.key)}</span></div><button class="btn s ${isSent(o.key)?'o':''}" data-act="avvisa" data-id="${o.x.id}">${isSent(o.key)?'Reinvia':'Avvisa'}</button></div>`}).join('')+(l.length>6?`<button class="btn o w" style="margin-top:8px" data-act="gotoMsg" data-id="${t.id}">Vedi tutti (${l.length})</button>`:''):'<div class="empty">Niente da fare qui.</div>'}</div>`}
  m.insertAdjacentHTML('beforeend',h);bind(m)}
@@ -290,13 +291,43 @@ function vSchede(m){
 
 /* ---------- azioni ---------- */
 function bind(m){m.querySelectorAll('[data-act]').forEach(b=>b.onclick=async()=>{const a=b.dataset.act,id=b.dataset.id;
- if(a==='newCli')editCliente();else if(a==='newScheda')editScheda(null,stipo);else if(a==='settings')settings();
+ if(a==='backup')backupFlow();else if(a==='newCli')editCliente();else if(a==='newScheda')editScheda(null,stipo);else if(a==='settings')settings();
  else if(a==='auguri'){const c=cli(id),r={nome:c.nome,tel:c.tel,vars:{}},k='a|'+c.id+'|'+new Date().getFullYear();if(sendOne(r,fill(tpl('auguri'),r,false),'sms',k))setTimeout(draw,500)}
  else if(a==='avvisa'){const x=S.schede.find(v=>v.id===id),t=tipo(x.tid),o=dueItems(t).find(v=>v.x.id===id);if(!o)return;const r=recOf(o);if(sendOne(r,fill(t.tpl||defTpl('T:'+t.id),r,false),'sms',r.id))setTimeout(draw,500)}
  else if(a==='pronto'){const x=S.schede.find(v=>v.id===id);x.stato='pronto';x.pronto=todayIso();save();draw();toast('Segnata pronta: premi Avvisa per scrivere al cliente')}
  else if(a==='ritirata'){const x=S.schede.find(v=>v.id===id);x.stato='ritirato';x.ritiro=todayIso();save();draw()}
  else if(a==='gotoMsg'){tab='msg';pickTipo('T:'+id);draw();scrollTo(0,0)}
  else if(a==='rubrica'){try{const cs=await navigator.contacts.select(['name','tel'],{multiple:true});let n=0;for(const k of cs){const nome=tc((k.name||[])[0]||''),tel=String((k.tel||[])[0]||'').replace(/\s+/g,'');if(!nome)continue;if(S.clienti.find(c=>c.nome===nome&&c.tel===tel))continue;S.clienti.push({id:uid(),nome,tel,nasc:'',note:'',tags:[]});n++}save();draw();toast(n+' clienti importati')}catch(e){toast('Importazione annullata')}}})}
+
+/* ---------- cifratura, blocco con codice, copia ---------- */
+const b64=u=>{let s='';u.forEach(x=>s+=String.fromCharCode(x));return btoa(s)};
+const unb64=s=>Uint8Array.from(atob(s),c=>c.charCodeAt(0));
+async function aesKey(pw,salt,iter){const k=await crypto.subtle.importKey('raw',new TextEncoder().encode(pw),'PBKDF2',false,['deriveKey']);return crypto.subtle.deriveKey({name:'PBKDF2',salt,iterations:iter,hash:'SHA-256'},k,{name:'AES-GCM',length:256},false,['encrypt','decrypt'])}
+async function encText(txt,pw){const salt=crypto.getRandomValues(new Uint8Array(16)),iv=crypto.getRandomValues(new Uint8Array(12)),key=await aesKey(pw,salt,250000);const ct=new Uint8Array(await crypto.subtle.encrypt({name:'AES-GCM',iv},key,new TextEncoder().encode(txt)));return JSON.stringify({app:'avvisa-clienti',enc:1,iter:250000,salt:b64(salt),iv:b64(iv),ct:b64(ct)})}
+async function decObj(o,pw){const key=await aesKey(pw,unb64(o.salt),o.iter);const pt=await crypto.subtle.decrypt({name:'AES-GCM',iv:unb64(o.iv)},key,unb64(o.ct));return JSON.parse(new TextDecoder().decode(pt))}
+async function pinHash(pin,salt){const k=await crypto.subtle.importKey('raw',new TextEncoder().encode(pin),'PBKDF2',false,['deriveBits']);return b64(new Uint8Array(await crypto.subtle.deriveBits({name:'PBKDF2',salt,iterations:200000,hash:'SHA-256'},k,256)))}
+async function setPin(pin){const salt=crypto.getRandomValues(new Uint8Array(16));LS.set('ac_pin',{salt:b64(salt),hash:await pinHash(pin,salt)})}
+async function checkPin(pin){const p=LS.get('ac_pin',null);if(!p)return true;return await pinHash(pin,unb64(p.salt))===p.hash}
+let hiddenAt=0,failN=0,lockUntil=0;
+function showLock(){
+ if(!LS.get('ac_pin',null)||document.getElementById('lock'))return;
+ const o=document.createElement('div');o.id='lock';o.style.cssText='position:fixed;inset:0;z-index:99;background:var(--g);color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;text-align:center';
+ o.innerHTML='<div style="font-size:44px">🔒</div><h2 style="margin:8px 0">Avvisa Clienti</h2><div>Inserisci il codice</div><input id="lkIn" type="password" inputmode="numeric" autocomplete="off" style="max-width:220px;text-align:center;font-size:24px;margin:14px 0"><div id="lkErr" style="min-height:22px;color:#ffd7d0"></div><button id="lkGo" style="max-width:220px;width:100%;padding:13px;border:0;border-radius:11px;background:#fff;color:#0b3a66;font-weight:700;font-size:16px">Sblocca</button><button id="lkForgot" style="margin-top:22px;background:none;border:0;color:#fff;text-decoration:underline;opacity:.85">Codice dimenticato?</button>';
+ document.body.appendChild(o);const inp=o.querySelector('#lkIn'),err=o.querySelector('#lkErr');setTimeout(()=>inp.focus(),50);
+ const go=async()=>{const w=lockUntil-Date.now();if(w>0){err.textContent='Troppi tentativi: riprova tra '+Math.ceil(w/1000)+' secondi';return}
+  if(await checkPin(inp.value)){failN=0;o.remove()}else{inp.value='';failN++;if(failN>=5){failN=0;lockUntil=Date.now()+30000;err.textContent='Troppi tentativi: attendi 30 secondi'}else err.textContent='Codice sbagliato'}};
+ o.querySelector('#lkGo').onclick=go;inp.onkeydown=e=>{if(e.key==='Enter')go()};
+ o.querySelector('#lkForgot').onclick=()=>{if(confirm('Per togliere il codice devi cancellare TUTTI i dati di questo telefono. Poi potrai ripristinarli da una copia di sicurezza. Continuare?')&&confirm('Sei sicuro? I dati non salvati in una copia andranno persi.')){['ac_data','ac_sent','ac_tpl','ac_pin','ac_bk'].forEach(k=>{try{localStorage.removeItem(k)}catch(e){}});location.reload()}}}
+document.addEventListener('visibilitychange',()=>{if(document.hidden)hiddenAt=Date.now();else if(hiddenAt&&Date.now()-hiddenAt>120000)showLock()});
+function askPw(title,text,cb){const o=sheet(`<h3>${esc(title)}</h3><div class="sub">${text}</div><input id="apw" type="password" placeholder="Password" style="margin-top:10px"><div class="err" id="apErr"></div><button class="btn w" id="apOk">Continua</button><button class="btn o w" style="margin-top:10px" id="apX">Annulla</button>`);$('#apX').onclick=()=>o.remove();$('#apOk').onclick=async()=>{const r=await cb($('#apw').value);if(r)$('#apErr').textContent=r;else o.remove()}}
+async function shareFile(txt,name){
+ try{const f=new File([txt],name,{type:'application/json'});if(navigator.canShare&&navigator.canShare({files:[f]})){await navigator.share({files:[f],title:name});LS.set('ac_bk',Date.now());draw();return}}catch(e){if(e&&e.name==='AbortError')return}
+ const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([txt],{type:'application/json'}));a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},1500);LS.set('ac_bk',Date.now());toast('Copia salvata');draw()}
+function backupFlow(){
+ const o=sheet(`<h3>💾 Copia di sicurezza</h3><div class="sub">Salva un file con tutti i tuoi dati (clienti, schede, modelli). Ti serve per cambiare telefono o se perdi i dati: mandalo su Drive, WhatsApp o email e poi ripristinalo sul telefono nuovo da Impostazioni.</div><div class="sub fl">Password per proteggere il file (consigliata). Se la dimentichi la copia non si può riaprire.</div><input id="bPw" type="password" placeholder="Password (vuoto = file non protetto)"><button class="btn w" id="bGo" style="margin-top:12px">Salva la copia</button><button class="btn o w" style="margin-top:10px" id="bX">Annulla</button>`);
+ $('#bX').onclick=()=>o.remove();
+ $('#bGo').onclick=async()=>{const pw=$('#bPw').value;let txt=JSON.stringify({app:'avvisa-clienti',at:new Date().toISOString(),data:S,tpl:LS.get('ac_tpl',{}),sent:sent()});if(pw){try{txt=await encText(txt,pw)}catch(e){toast('Cifratura non disponibile: salvo senza password')}}o.remove();shareFile(txt,'avvisa-clienti-backup-'+todayIso()+(pw?'-protetto':'')+'.json')}}
+function applyBackup(j){if(j.app!=='avvisa-clienti'||!j.data||!Array.isArray(j.data.clienti))throw 0;if(!confirm('Sostituire i dati di questo telefono con quelli della copia del '+fmtD(String(j.at).slice(0,10))+' ('+j.data.clienti.length+' clienti)?'))return false;LS.set('ac_tpl',j.tpl||{});S=migrate(j.data);S.tags=S.tags||[];save();LS.set('ac_sent',j.sent||{});return true}
 
 /* ---------- primo avvio ---------- */
 function welcome(){
@@ -319,7 +350,8 @@ function settings(){
  <h2 style="font-size:15px;margin:18px 0 4px">Altri modelli di messaggio</h2><div class="sub">I testi di ogni tipo di scheda si cambiano dal tipo stesso. Usa {nome} e {negozio}.</div>
  ${[['auguri','🎂 Auguri'],['libero','✏️ Messaggio libero']].map(([k,n])=>`<div class="sub fl"><b>${n}</b></div><textarea data-tp2="${k}" style="min-height:84px">${esc(tpl(k))}</textarea>`).join('')}
  <button class="btn w" style="margin-top:12px" id="sSave">Salva</button>
- <h2 style="font-size:15px;margin:18px 0 4px">Copia di sicurezza</h2><div class="sub">I dati stanno solo su questo telefono: salva ogni tanto una copia (su Drive, email…). Serve anche per passare a un telefono nuovo.</div>
+ ${(()=>{const has=!!LS.get('ac_pin',null);return `<h2 style="font-size:15px;margin:18px 0 4px">🔒 Blocco con codice</h2><div class="sub">Chiede un codice quando apri l’app (e se resta in background più di 2 minuti). Nasconde i clienti a chi prende il tuo telefono in mano; per la sicurezza completa tieni anche il blocco schermo del telefono.</div>${has?`<input id="pCur" type="password" inputmode="numeric" placeholder="Codice attuale" style="margin-top:8px"><input id="pNew" type="password" inputmode="numeric" placeholder="Nuovo codice (solo per cambiarlo)" style="margin-top:8px"><div style="display:flex;gap:8px;margin-top:8px"><button class="btn s o" id="pChg" style="flex:1">Cambia codice</button><button class="btn s o" id="pOff" style="flex:1">Disattiva</button></div>`:`<input id="pNew" type="password" inputmode="numeric" placeholder="Scegli un codice (4-8 cifre)" style="margin-top:8px"><input id="pNew2" type="password" inputmode="numeric" placeholder="Ripeti il codice" style="margin-top:8px"><button class="btn s o w" id="pOn" style="margin-top:8px">Attiva il blocco</button>`}<div class="err" id="pErr"></div>`})()}
+ <h2 style="font-size:15px;margin:18px 0 4px">Copia di sicurezza</h2><div class="sub">I dati stanno solo su questo telefono: salva ogni tanto una copia (puoi proteggerla con una password). Serve anche per passare a un telefono nuovo.</div>
  <button class="btn o w" style="margin-top:10px" id="sExp">⬇️ Salva una copia dei dati</button><button class="btn o w" style="margin-top:10px" id="sImp">⬆️ Ripristina da una copia</button><input id="sFl" type="file" accept=".json,application/json" style="display:none">
  <button class="btn o w" style="margin-top:10px" id="sX">Chiudi</button>`);
  const back=()=>{draw();settings()};
@@ -330,14 +362,20 @@ function settings(){
  $('#sNewT').onclick=()=>editTipo(null,back);
  $('#sPreAdd').onclick=()=>{const p=PRESETS[$('#sPre').value];let n=0;for(const t of p.tipi)if(!S.tipi.some(x=>x.nome===t.nome)){S.tipi.push(cloneTipo(t));n++}for(const g of p.tags)if(!S.tags.includes(g))S.tags.push(g);save();toast(n?n+' tipi aggiunti':'Questi tipi ci sono già');back()};
  $('#sSave').onclick=()=>{S.shop.nome=$('#sN').value.trim();S.shop.indirizzo=$('#sI').value.trim();const s={};o.querySelectorAll('[data-tp2]').forEach(t=>{if(t.value.trim()&&t.value!==DEF[t.dataset.tp2])s[t.dataset.tp2]=t.value});LS.set('ac_tpl',s);save();msg.text=msg.tipo?tpl(msg.tipo):'';toast('Salvato');o.remove();draw()};
- $('#sExp').onclick=async()=>{const txt=JSON.stringify({app:'avvisa-clienti',at:new Date().toISOString(),data:S,tpl:LS.get('ac_tpl',{}),sent:sent()}),name='avvisa-clienti-backup-'+todayIso()+'.json';
-  try{const f=new File([txt],name,{type:'application/json'});if(navigator.canShare&&navigator.canShare({files:[f]})){await navigator.share({files:[f],title:name});LS.set('ac_bk',Date.now());return}}catch(e){if(e&&e.name==='AbortError')return}
-  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([txt],{type:'application/json'}));a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},1500);LS.set('ac_bk',Date.now());toast('Copia salvata')};
+ $('#sExp').onclick=()=>{o.remove();backupFlow()};
  $('#sImp').onclick=()=>$('#sFl').click();
- $('#sFl').onchange=async()=>{const f=$('#sFl').files[0];if(!f)return;try{const j=JSON.parse(await f.text());if(j.app!=='avvisa-clienti'||!j.data||!Array.isArray(j.data.clienti))throw 0;if(!confirm('Sostituire i dati di questo telefono con quelli della copia del '+fmtD(String(j.at).slice(0,10))+' ('+j.data.clienti.length+' clienti)?'))return;LS.set('ac_tpl',j.tpl||{});S=migrate(j.data);S.tags=S.tags||[];save();LS.set('ac_sent',j.sent||{});o.remove();draw();toast('Dati ripristinati')}catch(e){toast('Questo file non è una copia valida')}}}
+ $('#sFl').onchange=async()=>{const f=$('#sFl').files[0];if(!f)return;let j;try{j=JSON.parse(await f.text())}catch(e){toast('Questo file non è una copia valida');return}
+  const fin=jj=>{try{if(applyBackup(jj)){o.remove();draw();toast('Dati ripristinati')}}catch(e){toast('Questo file non è una copia valida')}};
+  if(j.enc)askPw('Copia protetta','Scrivi la password scelta quando hai salvato la copia.',async pw=>{try{fin(await decObj(j,pw));return''}catch(e){return'Password sbagliata'}});else fin(j)};
+ const pe=t=>{$('#pErr').textContent=t};
+ const on=$('#pOn');if(on)on.onclick=async()=>{const a=$('#pNew').value,b=$('#pNew2').value;if(!/^\d{4,8}$/.test(a))return pe('Il codice deve avere da 4 a 8 cifre');if(a!==b)return pe('I due codici non coincidono');await setPin(a);toast('Blocco attivato');o.remove();settings()};
+ const ch=$('#pChg');if(ch){ch.onclick=async()=>{if(!await checkPin($('#pCur').value))return pe('Codice attuale sbagliato');const a=$('#pNew').value;if(!/^\d{4,8}$/.test(a))return pe('Il nuovo codice deve avere da 4 a 8 cifre');await setPin(a);toast('Codice cambiato');o.remove();settings()};
+  $('#pOff').onclick=async()=>{if(!await checkPin($('#pCur').value))return pe('Codice attuale sbagliato');try{localStorage.removeItem('ac_pin')}catch(e){}toast('Blocco disattivato');o.remove();settings()}}
+}
 
 if('serviceWorker' in navigator&&location.protocol.startsWith('http'))navigator.serviceWorker.register('sw.js').catch(()=>{});
 if(navigator.storage&&navigator.storage.persist)navigator.storage.persist().catch(()=>{});
+showLock();
 draw();
 if(!S.tipi.length&&!S.clienti.length)setTimeout(welcome,200);
 
