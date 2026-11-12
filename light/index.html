@@ -62,6 +62,7 @@ input[type=checkbox]{width:22px;height:22px;flex:none;accent-color:var(--g)}
 .big{font-size:19px;font-weight:700}
 .toast{position:fixed;left:50%;bottom:calc(90px + env(safe-area-inset-bottom));transform:translateX(-50%);background:#17212b;color:#fff;padding:10px 16px;border-radius:12px;font-size:14px;z-index:40;max-width:90%}
 .fl{margin:10px 0 4px}
+.tagc{border:1px solid #cfd8de;background:#fff;border-radius:22px;padding:7px 12px;font-size:14px;color:var(--t);margin:0 6px 6px 0}.tagc.on{background:var(--g);border-color:var(--g);color:#fff;font-weight:650}
 </style>
 
 </head>
@@ -83,46 +84,74 @@ const first=n=>tc(String(n||'').trim().split(/\s+/)[0]||'');
 const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
 function normTel(v){let raw=String(v||'').trim();if(!raw)return'';let plus=raw.startsWith('+');let d=raw.replace(/\D/g,'');if(d.startsWith('00')){d=d.slice(2);plus=true}if(!plus&&!(d.startsWith('39')&&d.length>=11))d='39'+d.replace(/^0+(?=3)/,'');if(d.startsWith('39')&&!/^393\d{8,9}$/.test(d))return'';return d.length>=11&&d.length<=15?'+'+d:''}
 function toast(t){const e=document.createElement('div');e.className='toast';e.textContent=t;document.body.appendChild(e);setTimeout(()=>e.remove(),2600)}
-function addMonths(iso,m){const p=String(iso).split('-').map(Number);if(p.length!==3||!p[0])return'';const d=new Date(p[0],p[1]-1+Number(m||0),p[2]);return isoOf(d)}
+function addMonths(iso,m){const p=String(iso).split('-').map(Number);if(p.length!==3||!p[0])return'';return isoOf(new Date(p[0],p[1]-1+Number(m||0),p[2]))}
 const daysTo=iso=>{const p=String(iso).split('-').map(Number);if(p.length!==3)return 9999;const t=new Date();return Math.round((new Date(p[0],p[1]-1,p[2])-new Date(t.getFullYear(),t.getMonth(),t.getDate()))/86400000)};
 
+/* ---------- tipi di negozio (modelli di partenza) ---------- */
+const TPL_LAV='Buongiorno {nome}, {titolo} è pronto per il ritiro presso {negozio}{indirizzo}.{importo} Grazie!';
+const TPL_SCA='Buongiorno {nome}, ricordiamo la scadenza di {titolo} il {data}. Passi da {negozio}{indirizzo}, siamo a disposizione!';
+const PRESETS={
+ telefonia:{nome:'Telefonia / Elettronica',tags:['Privato','Azienda'],tipi:[
+  {id:'rip',nome:'Riparazione',icona:'🛠️',modo:'lavoro',lt:'Dispositivo (es. iPhone 12)',ld:'Guasto / lavoro',tpl:'Buongiorno {nome}, il suo {titolo} è pronto per il ritiro presso {negozio}{indirizzo}.{importo} Grazie!'},
+  {id:'contr',nome:'Contratto',icona:'📄',modo:'scadenza',lt:'Servizio (luce, gas, fibra…)',lf:'Gestore / fornitore',mesi:12,giorni:30,tpl:'Buongiorno {nome}, il suo contratto {titolo} {fornitore} scade il {data}. Passi da {negozio}{indirizzo} per vedere le nuove offerte!'}]},
+ auto:{nome:'Officina / Auto',tags:['Privato','Azienda'],tipi:[
+  {id:'lavoro',nome:'Lavoro in officina',icona:'🔧',modo:'lavoro',lt:'Veicolo (modello / targa)',ld:'Intervento',tpl:'Buongiorno {nome}, il suo veicolo {titolo} è pronto per il ritiro presso {negozio}{indirizzo}.{importo} Grazie!'},
+  {id:'tagl',nome:'Tagliando / Revisione',icona:'🚗',modo:'scadenza',lt:'Veicolo (modello / targa)',lf:'Cosa (tagliando, revisione…)',mesi:12,giorni:30,tpl:'Buongiorno {nome}, per {titolo} {fornitore} la scadenza è il {data}. Ci chiami o passi da {negozio}{indirizzo} per prenotare.'}]},
+ estetica:{nome:'Parrucchiere / Estetica',tags:['Cliente fisso','Nuovo cliente'],tipi:[
+  {id:'trat',nome:'Promemoria trattamento',icona:'💇',modo:'scadenza',lt:'Trattamento (colore, taglio…)',lf:'',mesi:2,giorni:7,tpl:'Buongiorno {nome}, è ora di pensare al prossimo appuntamento per {titolo}. La aspettiamo da {negozio}{indirizzo}!'}]},
+ altro:{nome:'Altro tipo di negozio',tags:[],tipi:[
+  {id:'lavoro',nome:'Lavoro da riconsegnare',icona:'🧰',modo:'lavoro',lt:'Oggetto',ld:'Descrizione del lavoro',tpl:TPL_LAV},
+  {id:'prom',nome:'Promemoria con scadenza',icona:'⏰',modo:'scadenza',lt:'Cosa scade',lf:'',mesi:12,giorni:30,tpl:TPL_SCA}]}
+};
+const cloneTipo=(t,id)=>Object.assign({},t,{id:id||uid()});
+
 /* ---------- dati (restano in questo telefono) ---------- */
-let S=LS.get('ac_data',null)||{v:1,shop:{nome:'',indirizzo:'',tel:'',giorni:30},clienti:[],rip:[],contr:[]};
+function migrate(d){
+ if(!d||d.v>=2)return d;
+ const t=PRESETS.telefonia.tipi.map(x=>Object.assign({},x));
+ const tp=LS.get('ac_tpl',{});if(tp.rip)t[0].tpl=String(tp.rip).split('{dispositivo}').join('{titolo}');if(tp.scad)t[1].tpl=String(tp.scad).split('{contratto}').join('{titolo} {fornitore}');
+ const schede=[];
+ for(const x of d.rip||[])schede.push({id:x.id,tid:'rip',cid:x.cid,titolo:x.disp||'',dettaglio:x.guasto||'',prezzo:x.prezzo,stato:x.stato||'lavorazione',data:x.data,pronto:x.pronto,ritiro:x.ritiro,note:x.note||''});
+ for(const x of d.contr||[])schede.push({id:x.id,tid:'contr',cid:x.cid,titolo:x.tipo||'',fornitore:x.gestore||'',inizio:x.inizio,mesi:x.mesi,scad:x.scad,note:x.note||'',chiuso:x.chiuso});
+ const g=Number(d.shop&&d.shop.giorni)||30;t[1].giorni=g;
+ return{v:2,shop:Object.assign({nome:'',indirizzo:''},d.shop),tags:[],tipi:t,clienti:(d.clienti||[]).map(c=>Object.assign({tags:[]},c)),schede};
+}
+let S=migrate(LS.get('ac_data',null))||{v:2,shop:{nome:'',indirizzo:''},tags:[],tipi:[],clienti:[],schede:[]};
+if(S.v>=2&&!LS.get('ac_data',{}).v)LS.set('ac_data',S);
 const save=()=>LS.set('ac_data',S);
-const cli=id=>S.clienti.find(c=>c.id===id)||{id:'',nome:'(cliente eliminato)',tel:''};
+const cli=id=>S.clienti.find(c=>c.id===id)||{id:'',nome:'(cliente eliminato)',tel:'',tags:[]};
+const tipo=id=>S.tipi.find(t=>t.id===id);
 const sent=()=>LS.get('ac_sent',{});
 function markSent(key){const s=sent();s[key]=Date.now();LS.set('ac_sent',s)}
 const isSent=key=>sent()[key];
 const sentTxt=key=>{const t=isSent(key);return t?'✓ '+fmtD(isoOf(new Date(t))):''};
-const TIPI_C=['Luce','Gas','Fibra / Internet','Mobile','Altro'];
 const ST={lavorazione:'In lavorazione',pronto:'Pronto',ritirato:'Ritirato'};
-const scadOf=c=>c.scad||addMonths(c.inizio,c.mesi);
+const scadOf=x=>x.scad||addMonths(x.inizio,x.mesi);
 
 /* ---------- modelli messaggio ---------- */
-const DEF={
- auguri:'Buon compleanno {nome}! 🎂 Tanti auguri da {negozio}.',
- scad:'Buongiorno {nome}, il suo contratto {contratto} scade il {data}. Passi da {negozio}{indirizzo} per vedere le nuove offerte!',
- rip:'Buongiorno {nome}, il suo {dispositivo} è pronto per il ritiro presso {negozio}{indirizzo}.{importo} Grazie!',
- libero:'Buongiorno {nome}, '
-};
-const TIPI=[['auguri','🎂','Auguri'],['scad','⏰','Contratto in scadenza'],['rip','🛠️','Riparazione pronta'],['libero','✏️','Messaggio libero']];
-const tpl=k=>(LS.get('ac_tpl',{})[k])||DEF[k];
+const DEF={auguri:'Buon compleanno {nome}! 🎂 Tanti auguri da {negozio}.',libero:'Buongiorno {nome}, '};
+const tpl=k=>{if(k.startsWith('T:')){const t=tipo(k.slice(2));return t?t.tpl:''}return(LS.get('ac_tpl',{})[k])||DEF[k]};
+const defTpl=k=>{if(k.startsWith('T:')){const t=tipo(k.slice(2));return t?(t.modo==='lavoro'?TPL_LAV:TPL_SCA):''}return DEF[k]};
 const shopName=()=>S.shop.nome||'noi';
-function fill(t,r,grp){let o=String(t);const v=Object.assign({nome:grp?'':first(r.nome),negozio:shopName(),indirizzo:S.shop.indirizzo?' ('+S.shop.indirizzo+')':''},r.vars||{});for(const k in v)o=o.split('{'+k+'}').join(v[k]);if(!v.nome)o=o.replace(/ \{nome\}/g,'').replace(/\{nome\}/g,'').replace(/Buongiorno ,/g,'Buongiorno,');return o.replace(/ {2,}/g,' ').replace(/ ,/g,',')}
+function fill(t,r,grp){let o=String(t);const v=Object.assign({nome:grp?'':first(r.nome),negozio:shopName(),indirizzo:S.shop.indirizzo?' ('+S.shop.indirizzo+')':''},r.vars||{});for(const k in v)o=o.split('{'+k+'}').join(v[k]);if(!v.nome)o=o.replace(/ \{nome\}/g,'').replace(/\{nome\}/g,'').replace(/Buongiorno ,/g,'Buongiorno,');return o.replace(/ {2,}/g,' ').replace(/ ,/g,',').replace(/ \./g,'.')}
+function schedaVars(x,d){const t=tipo(x.tid)||{};return{titolo:x.titolo||'',dettaglio:x.dettaglio||'',fornitore:x.fornitore||'',data:fmtD(d||scadOf(x)),importo:Number(x.prezzo)>0?' Importo: '+eur(x.prezzo)+'.':'',dispositivo:x.titolo||'',contratto:((x.titolo||'')+' '+(x.fornitore||'')).trim()}}
 
 /* ---------- stato ---------- */
-let tab='oggi',msg={tipo:null,sel:{},text:'',mode:'uno',ch:'sms',q:'',manual:''},cq='',queue=null;
+let tab='oggi',msg={tipo:null,sel:{},text:'',ch:'sms',q:'',tag:'',manual:''},cq='',ctag='',stipo='',queue=null;
 
 /* ---------- elenchi derivati ---------- */
 function bdays(maxOff){const t=new Date(),out=[];for(let off=0;off<=maxOff;off++){const d=new Date(t.getFullYear(),t.getMonth(),t.getDate()+off);for(const c of S.clienti){const p=String(c.nasc||'').split('-').map(Number);if(p.length===3&&p[1]===d.getMonth()+1&&p[2]===d.getDate())out.push({c,off,key:'a|'+c.id+'|'+d.getFullYear()})}}return out}
-function scadList(){const g=Number(S.shop.giorni)||30;return S.contr.map(x=>{const d=scadOf(x);return{x,d,gg:daysTo(d),key:'s|'+x.id+'|'+d}}).filter(o=>o.d&&o.gg<=g&&!o.x.chiuso).sort((a,b)=>a.d.localeCompare(b.d))}
-function recipients(tipo){
- if(tipo==='auguri')return bdays(7).map(b=>({id:b.key,nome:b.c.nome,tel:b.c.tel,info:b.off===0?'Oggi':b.off===1?'Domani':'tra '+b.off+' giorni',due:b.off===0,vars:{}}));
- if(tipo==='scad')return scadList().map(o=>{const c=cli(o.x.cid);return{id:o.key,nome:c.nome,tel:c.tel,info:(o.gg<0?'scaduto il ':'scade il ')+fmtD(o.d)+' · '+o.x.tipo+' '+(o.x.gestore||''),due:true,vars:{contratto:(o.x.tipo+' '+(o.x.gestore||'')).trim(),data:fmtD(o.d)}}});
- if(tipo==='rip')return S.rip.filter(x=>x.stato==='pronto').map(x=>{const c=cli(x.cid);return{id:'r|'+x.id+'|'+(x.pronto||''),nome:c.nome,tel:c.tel,info:x.disp+(x.pronto?' · pronto il '+fmtD(x.pronto):''),due:true,vars:{dispositivo:x.disp||'dispositivo',importo:Number(x.prezzo)>0?' Importo: '+eur(x.prezzo)+'.':''}}});
- if(tipo==='libero'){const q=msg.q.trim().toLowerCase(),dq=q.replace(/\D/g,'');let l=S.clienti.filter(c=>c.tel);if(q)l=l.filter(c=>c.nome.toLowerCase().includes(q)||(dq.length>=3&&c.tel.replace(/\D/g,'').includes(dq)));
-  const out=l.slice().sort((a,b)=>a.nome.localeCompare(b.nome,'it')).slice(0,40).map(c=>({id:'l|'+c.id,nome:c.nome,tel:c.tel,info:c.tel,due:false,vars:{}}));
-  for(const k in msg.sel)if(msg.sel[k]&&msg.sel[k].extra&&!out.find(o=>o.id===k))out.unshift(msg.sel[k].extra);return out}
+function dueItems(t){
+ if(t.modo==='lavoro')return S.schede.filter(x=>x.tid===t.id&&x.stato==='pronto').map(x=>({x,t,key:'r|'+x.id+'|'+(x.pronto||''),info:(x.titolo||'')+(x.pronto?' · pronto il '+fmtD(x.pronto):'')}));
+ const g=Number(t.giorni)||30;
+ return S.schede.filter(x=>x.tid===t.id&&!x.chiuso).map(x=>{const d=scadOf(x);return{x,t,d,gg:daysTo(d),key:'s|'+x.id+'|'+d}}).filter(o=>o.d&&o.gg<=g).sort((a,b)=>a.d.localeCompare(b.d)).map(o=>Object.assign(o,{info:(o.gg<0?'scaduto il ':'scade il ')+fmtD(o.d)+' · '+(o.x.titolo||'')+(o.x.fornitore?' '+o.x.fornitore:'')}))}
+const recOf=o=>{const c=cli(o.x.cid);return{id:o.key,nome:c.nome,tel:c.tel,info:o.info,due:true,vars:schedaVars(o.x,o.d)}};
+function recipients(k){
+ if(k==='auguri')return bdays(7).map(b=>({id:b.key,nome:b.c.nome,tel:b.c.tel,info:b.off===0?'Oggi':b.off===1?'Domani':'tra '+b.off+' giorni',due:b.off===0,vars:{}}));
+ if(k.startsWith('T:')){const t=tipo(k.slice(2));return t?dueItems(t).map(recOf):[]}
+ if(k==='libero'){const q=msg.q.trim().toLowerCase(),dq=q.replace(/\D/g,'');let l=S.clienti.filter(c=>c.tel);if(msg.tag)l=l.filter(c=>(c.tags||[]).includes(msg.tag));if(q)l=l.filter(c=>c.nome.toLowerCase().includes(q)||(dq.length>=3&&c.tel.replace(/\D/g,'').includes(dq)));
+  const out=l.slice().sort((a,b)=>a.nome.localeCompare(b.nome,'it')).slice(0,100).map(c=>({id:'l|'+c.id,nome:c.nome,tel:c.tel,info:c.tel+((c.tags||[]).length?' · '+c.tags.join(', '):''),due:false,vars:{}}));
+  for(const id in msg.sel)if(msg.sel[id]&&msg.sel[id].extra&&!out.find(o=>o.id===id))out.unshift(msg.sel[id].extra);return out}
  return[]}
 
 /* ---------- invio ---------- */
@@ -131,80 +160,93 @@ function waHref(tel,body){return 'https://wa.me/'+tel.replace(/\D/g,'')+'?text='
 function openLink(h){const a=document.createElement('a');a.href=h;a.target='_blank';a.rel='noopener';document.body.appendChild(a);a.click();a.remove()}
 function sendOne(r,text,ch,key){const tel=normTel(r.tel);if(!tel){toast('Manca un numero di cellulare valido');return false}if(key)markSent(key);if(ch==='wa')openLink(waHref(tel,text));else location.href=smsHref([tel],text);return true}
 
-/* ---------- finestre ---------- */
+/* ---------- finestre e moduli ---------- */
 function sheet(html){document.getElementById('sov')?.remove();const o=document.createElement('div');o.className='ov';o.id='sov';o.innerHTML='<div class="sheet">'+html+'</div>';o.onclick=e=>{if(e.target===o)o.remove()};document.body.appendChild(o);return o}
-/* modulo generico: campi [{k,label,type,value,options,required,placeholder}] ; type 'cliente' = scelta cliente o nuovo */
-function formSheet(title,fields,onSave,onDelete){
+function formSheet(title,fields,onSave,onDelete,after){
  const fld=f=>{const v=f.value??'';
   if(f.type==='cliente'){const l=S.clienti.slice().sort((a,b)=>a.nome.localeCompare(b.nome,'it'));return `<div class="sub fl">${esc(f.label)}</div><select data-f="${f.k}"><option value="">＋ Nuovo cliente…</option>${l.map(c=>`<option value="${c.id}" ${c.id===v?'selected':''}>${esc(c.nome)}${c.tel?' · '+esc(c.tel):''}</option>`).join('')}</select><div id="newCli" style="${v?'display:none':''}"><input data-f="_nome" placeholder="Nome e cognome" style="margin-top:8px"><input data-f="_tel" type="tel" inputmode="tel" placeholder="Cellulare" style="margin-top:8px"></div>`}
-  if(f.type==='select')return `<div class="sub fl">${esc(f.label)}</div><select data-f="${f.k}">${f.options.map(o=>{const[val,txt]=Array.isArray(o)?o:[o,o];return `<option value="${esc(val)}" ${String(val)===String(v)?'selected':''}>${esc(txt)}</option>`}).join('')}</select>`;
-  if(f.type==='textarea')return `<div class="sub fl">${esc(f.label)}</div><textarea data-f="${f.k}" style="min-height:70px" placeholder="${esc(f.placeholder||'')}">${esc(v)}</textarea>`;
+  if(f.type==='tags')return `<div class="sub fl">${esc(f.label)}</div><div class="chips" id="tagBox" style="flex-wrap:wrap;overflow:visible">${S.tags.map(t=>`<button type="button" class="tagc ${(v||[]).includes(t)?'on':''}" data-t="${esc(t)}">${esc(t)}</button>`).join('')}</div><div style="display:flex;gap:8px"><input id="tagNew" placeholder="＋ nuova categoria" style="padding:8px 10px"><button type="button" class="btn s o" id="tagAdd">Aggiungi</button></div>`;
+  if(f.type==='select')return `<div class="sub fl">${esc(f.label)}</div><select data-f="${f.k}" ${f.disabled?'disabled':''}>${f.options.map(o=>{const[val,txt]=Array.isArray(o)?o:[o,o];return `<option value="${esc(val)}" ${String(val)===String(v)?'selected':''}>${esc(txt)}</option>`}).join('')}</select>`;
+  if(f.type==='textarea')return `<div class="sub fl">${esc(f.label)}</div><textarea data-f="${f.k}" style="min-height:${f.h||70}px" placeholder="${esc(f.placeholder||'')}">${esc(v)}</textarea>`;
   return `<div class="sub fl">${esc(f.label)}</div><input data-f="${f.k}" type="${f.type||'text'}" ${f.type==='number'?'inputmode="decimal" step="any"':''} ${f.type==='tel'?'inputmode="tel"':''} value="${esc(v)}" placeholder="${esc(f.placeholder||'')}">`};
  const o=sheet(`<h3>${esc(title)}</h3>${fields.map(fld).join('')}<div class="err" id="fErr"></div><button class="btn w" id="fOk">Salva</button>${onDelete?'<button class="btn w" id="fDel" style="margin-top:10px;background:#fdecea;color:#c0392b">Elimina</button>':''}<button class="btn o w" style="margin-top:10px" id="fX">Annulla</button>`);
+ const fin=()=>{o.remove();after?after():draw()};
  const sel=o.querySelector('select[data-f="cid"]');if(sel)sel.onchange=()=>{$('#newCli').style.display=sel.value?'none':''};
+ const tb=$('#tagBox');if(tb){const bind=()=>tb.querySelectorAll('.tagc').forEach(b=>b.onclick=()=>b.classList.toggle('on'));bind();$('#tagAdd').onclick=()=>{const n=tc($('#tagNew').value);if(!n)return;if(!S.tags.includes(n))S.tags.push(n);save();const b=document.createElement('button');b.type='button';b.className='tagc on';b.dataset.t=n;b.textContent=n;if(!tb.querySelector('[data-t="'+n.replace(/"/g,'\\"')+'"]'))tb.appendChild(b);bind();$('#tagNew').value=''}}
  $('#fX').onclick=()=>o.remove();
- if(onDelete)$('#fDel').onclick=()=>{if(confirm('Eliminare definitivamente?')){onDelete();o.remove();draw()}};
- $('#fOk').onclick=()=>{const r={};o.querySelectorAll('[data-f]').forEach(e=>r[e.dataset.f]=e.value.trim());
-  for(const f of fields){if(f.type==='cliente'){if(!r.cid){if(!r._nome){$('#fErr').textContent='Scegli un cliente o scrivi il nome del nuovo';return}const c={id:uid(),nome:tc(r._nome),tel:r._tel||'',nasc:'',note:''};S.clienti.push(c);r.cid=c.id}}else if(f.required&&!r[f.k]){$('#fErr').textContent='Manca: '+f.label;return}}
-  delete r._nome;delete r._tel;const err=onSave(r);if(err){$('#fErr').textContent=err;return}save();o.remove();draw()}}
+ if(onDelete)$('#fDel').onclick=()=>{if(confirm('Eliminare definitivamente?')){onDelete();save();fin()}};
+ $('#fOk').onclick=()=>{const r={};o.querySelectorAll('[data-f]').forEach(e=>r[e.dataset.f]=e.value.trim());if(tb)r.tags=[...tb.querySelectorAll('.tagc.on')].map(b=>b.dataset.t);
+  for(const f of fields){if(f.type==='cliente'){if(!r.cid){if(!r._nome){$('#fErr').textContent='Scegli un cliente o scrivi il nome del nuovo';return}const c={id:uid(),nome:tc(r._nome),tel:r._tel||'',nasc:'',note:'',tags:[]};S.clienti.push(c);r.cid=c.id}}else if(f.required&&!r[f.k]){$('#fErr').textContent='Manca: '+f.label;return}}
+  delete r._nome;delete r._tel;const err=onSave(r);if(err){$('#fErr').textContent=err;return}save();fin()}}
 
-/* ---------- moduli ---------- */
-function editCliente(c){const n=!c;c=c||{};formSheet(n?'Nuovo cliente':'Modifica cliente',[{k:'nome',label:'Nome e cognome',value:c.nome,required:true},{k:'tel',label:'Cellulare',type:'tel',value:c.tel},{k:'nasc',label:'Data di nascita (per gli auguri)',type:'date',value:c.nasc},{k:'note',label:'Note',type:'textarea',value:c.note}],
+function editCliente(c){const n=!c;c=c||{tags:[]};formSheet(n?'Nuovo cliente':'Modifica cliente',[{k:'nome',label:'Nome e cognome',value:c.nome,required:true},{k:'tel',label:'Cellulare',type:'tel',value:c.tel},{k:'nasc',label:'Data di nascita (per gli auguri)',type:'date',value:c.nasc},{k:'tags',label:'Categorie',type:'tags',value:c.tags},{k:'note',label:'Note',type:'textarea',value:c.note}],
  r=>{r.nome=tc(r.nome);if(n)S.clienti.push(Object.assign({id:uid()},r));else Object.assign(c,r)},
- n?null:()=>{S.clienti=S.clienti.filter(x=>x.id!==c.id);S.rip=S.rip.filter(x=>x.cid!==c.id);S.contr=S.contr.filter(x=>x.cid!==c.id);save()})}
-function editRip(x,cid){const n=!x;x=x||{cid:cid||'',stato:'lavorazione'};formSheet(n?'Nuova riparazione':'Modifica riparazione',[{k:'cid',label:'Cliente',type:'cliente',value:x.cid},{k:'disp',label:'Dispositivo (es. iPhone 12)',value:x.disp,required:true},{k:'guasto',label:'Guasto / lavoro',value:x.guasto},{k:'prezzo',label:'Prezzo al cliente €',type:'number',value:x.prezzo},{k:'stato',label:'Stato',type:'select',options:Object.entries(ST),value:x.stato},{k:'note',label:'Note',type:'textarea',value:x.note}],
- r=>{const was=x.stato;if(n){x=Object.assign({id:uid(),data:todayIso()},r);S.rip.push(x)}else Object.assign(x,r);if(x.stato==='pronto'&&(n||was!=='pronto'))x.pronto=todayIso();if(x.stato==='ritirato'&&(n||was!=='ritirato'))x.ritiro=todayIso()},
- n?null:()=>{S.rip=S.rip.filter(v=>v.id!==x.id);save()})}
-function editContr(x,cid){const n=!x;x=x||{cid:cid||'',tipo:'Luce',mesi:12,inizio:todayIso()};formSheet(n?'Nuovo contratto':'Modifica contratto',[{k:'cid',label:'Cliente',type:'cliente',value:x.cid},{k:'tipo',label:'Tipo',type:'select',options:TIPI_C,value:x.tipo},{k:'gestore',label:'Gestore / fornitore',value:x.gestore,placeholder:'es. Enel, Fastweb…'},{k:'inizio',label:'Data di attivazione',type:'date',value:x.inizio,required:true},{k:'mesi',label:'Dopo quanti mesi ricontattare',type:'number',value:x.mesi,required:true},{k:'note',label:'Note (offerta, codice…)',type:'textarea',value:x.note}],
- r=>{r.mesi=Number(r.mesi)||0;if(r.mesi<=0)return'Scrivi dopo quanti mesi ricontattare il cliente';if(n)S.contr.push(Object.assign({id:uid()},r));else Object.assign(x,r)},
- n?null:()=>{S.contr=S.contr.filter(v=>v.id!==x.id);save()})}
+ n?null:()=>{S.clienti=S.clienti.filter(x=>x.id!==c.id);S.schede=S.schede.filter(x=>x.cid!==c.id)})}
+function editScheda(x,tid,cid){
+ const n=!x,t=tipo(x?x.tid:tid);if(!t){toast('Prima crea un tipo di scheda nelle impostazioni');return}
+ x=x||{tid:t.id,cid:cid||'',stato:'lavorazione',mesi:t.mesi||12,inizio:todayIso()};
+ const f=[{k:'cid',label:'Cliente',type:'cliente',value:x.cid},{k:'titolo',label:t.lt||'Titolo',value:x.titolo,required:true}];
+ if(t.modo==='lavoro')f.push({k:'dettaglio',label:t.ld||'Descrizione',value:x.dettaglio},{k:'prezzo',label:'Prezzo al cliente €',type:'number',value:x.prezzo},{k:'stato',label:'Stato',type:'select',options:Object.entries(ST),value:x.stato});
+ else{if(t.lf)f.push({k:'fornitore',label:t.lf,value:x.fornitore});f.push({k:'inizio',label:'Data di partenza',type:'date',value:x.inizio,required:true},{k:'mesi',label:'Dopo quanti mesi ricontattare',type:'number',value:x.mesi,required:true})}
+ f.push({k:'note',label:'Note',type:'textarea',value:x.note});
+ formSheet((n?'Nuova scheda · ':'Modifica · ')+t.nome,f,r=>{const was=x.stato;if(t.modo==='scadenza'){r.mesi=Number(r.mesi)||0;if(r.mesi<=0)return'Scrivi dopo quanti mesi ricontattare il cliente'}
+  if(n){x=Object.assign({id:uid(),tid:t.id,data:todayIso()},r);S.schede.push(x)}else Object.assign(x,r);if(x.stato==='pronto'&&(n||was!=='pronto'))x.pronto=todayIso();if(x.stato==='ritirato'&&(n||was!=='ritirato'))x.ritiro=todayIso()},
+  n?null:()=>{S.schede=S.schede.filter(v=>v.id!==x.id)})}
+function editTipo(t,after){
+ const n=!t;t=t||{modo:'lavoro',icona:'🧰',nome:'',lt:'Oggetto',ld:'Descrizione',mesi:12,giorni:30,tpl:TPL_LAV};
+ const sc=t.modo==='scadenza';
+ formSheet(n?'Nuovo tipo di scheda':'Modifica tipo · '+t.nome,[
+  {k:'nome',label:'Nome (es. Riparazione, Tagliando…)',value:t.nome,required:true},{k:'icona',label:'Icona (una emoji)',value:t.icona,placeholder:'🛠️'},
+  {k:'modo',label:'Come funziona',type:'select',disabled:!n,options:[['lavoro','Lavoro da riconsegnare (in lavorazione → pronto → ritirato)'],['scadenza','Scadenza da ricontattare (dopo N mesi)']],value:t.modo},
+  {k:'lt',label:'Nome del primo campo (es. Dispositivo, Veicolo)',value:t.lt},
+  {k:'ld',label:'Nome del secondo campo (solo per «lavoro»)',value:t.ld},{k:'lf',label:'Nome del campo fornitore (solo per «scadenza», vuoto = nessuno)',value:t.lf},
+  {k:'mesi',label:'Mesi predefiniti prima di ricontattare (solo scadenza)',type:'number',value:t.mesi},{k:'giorni',label:'Avvisami quanti giorni prima (solo scadenza)',type:'number',value:t.giorni},
+  {k:'tpl',label:'Testo del messaggio ({nome} {titolo} {fornitore} {data} {importo} {negozio} {indirizzo})',type:'textarea',value:t.tpl,h:110}],
+  r=>{r.mesi=Number(r.mesi)||12;r.giorni=Number(r.giorni)||30;if(!r.tpl)r.tpl=r.modo==='lavoro'?TPL_LAV:TPL_SCA;if(n)S.tipi.push(Object.assign({id:uid()},r));else{delete r.modo;Object.assign(t,r)}},
+  n?null:()=>{if(S.schede.some(x=>x.tid===t.id)&&!confirm('Ci sono schede di questo tipo: verranno eliminate. Continuare?'))return;S.schede=S.schede.filter(x=>x.tid!==t.id);S.tipi=S.tipi.filter(x=>x.id!==t.id)},after)}
 
 /* ---------- disegno ---------- */
-const TABS=[['oggi','🏠','Oggi'],['msg','✉️','Messaggi'],['clienti','👥','Clienti'],['rip','🛠️','Riparazioni'],['contr','📄','Contratti']];
-function badges(){const b=bdays(0).filter(x=>x.c.tel&&!isSent(x.key)).length,r=S.rip.filter(x=>x.stato==='pronto'&&!isSent('r|'+x.id+'|'+(x.pronto||''))).length,s=scadList().filter(o=>!isSent(o.key)).length;return{oggi:b+r+s}}
+const TABS=[['oggi','🏠','Oggi'],['msg','✉️','Messaggi'],['clienti','👥','Clienti'],['schede','📋','Schede']];
+function pendingCount(){let n=bdays(0).filter(b=>b.c.tel&&!isSent(b.key)).length;for(const t of S.tipi)n+=dueItems(t).filter(o=>!isSent(o.key)).length;return n}
 function draw(){
- const bd=badges();
- $('#app').innerHTML=`<header><h1>${esc(S.shop.nome||'Avvisa Clienti')}<small>${S.clienti.length} clienti · dati salvati su questo telefono</small></h1><button id="bSet">⚙️</button></header><main id="main"></main><nav>${TABS.map(([k,i,t])=>`<button data-t="${k}" class="${tab===k?'on':''}"><span>${i}</span>${t}${bd[k]?`<i>${bd[k]}</i>`:''}</button>`).join('')}</nav>`;
+ const bd=pendingCount();
+ $('#app').innerHTML=`<header><h1>${esc(S.shop.nome||'Avvisa Clienti')}<small>${S.clienti.length} clienti · dati salvati su questo telefono</small></h1><button id="bSet">⚙️</button></header><main id="main"></main><nav>${TABS.map(([k,i,t])=>`<button data-t="${k}" class="${tab===k?'on':''}"><span>${i}</span>${t}${k==='oggi'&&bd?`<i>${bd}</i>`:''}</button>`).join('')}</nav>`;
  $('#bSet').onclick=settings;
  document.querySelectorAll('nav [data-t]').forEach(b=>b.onclick=()=>{tab=b.dataset.t;if(tab==='msg'&&!msg.tipo)pickTipo('libero');draw();scrollTo(0,0)});
- ({oggi:vOggi,msg:vMsg,clienti:vClienti,rip:vRip,contr:vContr})[tab]($('#main'))}
+ ({oggi:vOggi,msg:vMsg,clienti:vClienti,schede:vSchede})[tab]($('#main'))}
 
 function vOggi(m){
- const bo=bdays(0),rp=S.rip.filter(x=>x.stato==='pronto'),sc=scadList();let h='';
- if(!S.clienti.length)h+=`<div class="card"><h2>👋 Benvenuto</h2><div class="sub" style="margin-bottom:10px">Comincia inserendo i tuoi clienti: poi aggiungi riparazioni e contratti e l’app ti ricorda chi avvisare.</div><button class="btn w" data-act="newCli">＋ Aggiungi il primo cliente</button></div>`;
+ const bo=bdays(0);let h='';
+ if(!S.clienti.length)h+=`<div class="card"><h2>👋 Benvenuto</h2><div class="sub" style="margin-bottom:10px">Comincia inserendo i tuoi clienti: poi aggiungi le schede e l’app ti ricorda chi avvisare.</div><button class="btn w" data-act="newCli">＋ Aggiungi il primo cliente</button></div>`;
  h+=`<div class="card"><h2>🎂 Compleanni di oggi <span class="pill m">${bo.length}</span></h2>${bo.length?bo.map(b=>`<div class="row"><div class="x"><b>${esc(b.c.nome)}</b><span class="sub">${esc(b.c.tel)||'senza numero'} ${sentTxt(b.key)}</span></div>${b.c.tel?`<button class="btn s ${isSent(b.key)?'o':''}" data-act="auguri" data-id="${b.c.id}">${isSent(b.key)?'Reinvia':'Auguri'}</button>`:''}</div>`).join(''):'<div class="empty">Nessun compleanno oggi.</div>'}</div>`;
- h+=`<div class="card"><h2>🛠️ Riparazioni pronte <span class="pill m">${rp.length}</span></h2>${rp.length?rp.map(x=>{const k='r|'+x.id+'|'+(x.pronto||''),c=cli(x.cid);return `<div class="row"><div class="x"><b>${esc(c.nome)}</b><span class="sub">${esc(x.disp)} ${sentTxt(k)}</span></div><button class="btn s ${isSent(k)?'o':''}" data-act="rip" data-id="${x.id}">${isSent(k)?'Reinvia':'Avvisa'}</button></div>`}).join(''):'<div class="empty">Nessuna riparazione pronta da riconsegnare.</div>'}</div>`;
- h+=`<div class="card"><h2>⏰ Contratti da ricontattare <span class="pill ${sc.length?'a':'m'}">${sc.length}</span></h2>${sc.length?sc.slice(0,6).map(o=>{const c=cli(o.x.cid);return `<div class="row"><div class="x"><b>${esc(c.nome)}</b><span class="sub">${esc(o.x.tipo)} ${esc(o.x.gestore||'')} · ${o.gg<0?'scaduto il':'scade il'} ${fmtD(o.d)} ${sentTxt(o.key)}</span></div><button class="btn s ${isSent(o.key)?'o':''}" data-act="scad" data-id="${o.x.id}">${isSent(o.key)?'Reinvia':'Avvisa'}</button></div>`}).join('')+(sc.length>6?`<button class="btn o w" style="margin-top:8px" data-act="gotoScad">Vedi tutti (${sc.length})</button>`:''):'<div class="empty">Nessun contratto in scadenza.</div>'}</div>`;
+ for(const t of S.tipi){const l=dueItems(t);h+=`<div class="card"><h2>${esc(t.icona||'📄')} ${esc(t.nome)} · ${t.modo==='lavoro'?'pronti da riconsegnare':'da ricontattare'} <span class="pill ${l.length&&t.modo==='scadenza'?'a':'m'}">${l.length}</span></h2>${l.length?l.slice(0,6).map(o=>{const c=cli(o.x.cid);return `<div class="row"><div class="x"><b>${esc(c.nome)}</b><span class="sub">${esc(o.info)} ${sentTxt(o.key)}</span></div><button class="btn s ${isSent(o.key)?'o':''}" data-act="avvisa" data-id="${o.x.id}">${isSent(o.key)?'Reinvia':'Avvisa'}</button></div>`}).join('')+(l.length>6?`<button class="btn o w" style="margin-top:8px" data-act="gotoMsg" data-id="${t.id}">Vedi tutti (${l.length})</button>`:''):'<div class="empty">Niente da fare qui.</div>'}</div>`}
  m.insertAdjacentHTML('beforeend',h);bind(m)}
 
-function pickTipo(t){msg.tipo=t;msg.sel={};msg.q='';msg.manual='';msg.text=tpl(t);if(t!=='libero')recipients(t).forEach(x=>{if(x.due&&normTel(x.tel)&&!isSent(x.id))msg.sel[x.id]={r:x}})}
+function pickTipo(k){msg.tipo=k;msg.sel={};msg.q='';msg.tag='';msg.manual='';msg.text=tpl(k);if(k!=='libero')recipients(k).forEach(x=>{if(x.due&&normTel(x.tel)&&!isSent(x.id))msg.sel[x.id]={r:x}})}
+function msgKinds(){return[['auguri','🎂','Auguri']].concat(S.tipi.map(t=>['T:'+t.id,t.icona||'📄',t.nome]),[['libero','✏️','Messaggio libero']])}
 function vMsg(m){
+ if(msg.tipo&&msg.tipo.startsWith('T:')&&!tipo(msg.tipo.slice(2)))pickTipo('libero');
  const t=msg.tipo,rs=recipients(t),selR=Object.keys(msg.sel).filter(k=>msg.sel[k]).map(k=>msg.sel[k].r||msg.sel[k].extra).filter(Boolean);
- let h=`<div class="chips">${TIPI.map(([k,i,n])=>`<button data-tp="${k}" class="${t===k?'on':''}">${i} ${n}</button>`).join('')}</div><div class="card"><h2>1 · A chi</h2>`;
- if(t==='libero')h+=`<input id="mq" placeholder="Cerca nome o numero" value="${esc(msg.q)}"><div style="display:flex;gap:8px;margin:8px 0"><input id="mnum" placeholder="…oppure scrivi un numero" inputmode="tel" value="${esc(msg.manual)}"><button class="btn s" id="madd">Aggiungi</button></div>`;
+ let h=`<div class="chips">${msgKinds().map(([k,i,n])=>`<button data-tp="${esc(k)}" class="${t===k?'on':''}">${i} ${esc(n)}</button>`).join('')}</div><div class="card"><h2>1 · A chi</h2>`;
+ if(t==='libero'){h+=`<input id="mq" placeholder="Cerca nome o numero" value="${esc(msg.q)}">`;if(S.tags.length)h+=`<div class="chips" style="margin-top:8px"><button data-tg="" class="${msg.tag?'':'on'}">Tutte le categorie</button>${S.tags.map(g=>`<button data-tg="${esc(g)}" class="${msg.tag===g?'on':''}">${esc(g)}</button>`).join('')}</div>`;
+  h+=`<div style="display:flex;gap:8px;margin:8px 0"><input id="mnum" placeholder="…oppure scrivi un numero" inputmode="tel" value="${esc(msg.manual)}"><button class="btn s" id="madd">Aggiungi</button></div>${rs.length?`<div style="display:flex;gap:8px;margin-bottom:6px"><button class="btn s o" id="selAll">Seleziona tutti (${rs.filter(r=>normTel(r.tel)).length})</button><button class="btn s o" id="selNone">Nessuno</button></div>`:''}`}
  h+=rs.length?rs.map(r=>{const ok=!!normTel(r.tel),on=!!msg.sel[r.id],st=sentTxt(r.id);return `<label class="row c" style="${ok?'':'opacity:.5'}"><input type="checkbox" data-rc="${esc(r.id)}" ${on?'checked':''} ${ok?'':'disabled'}><div class="x"><b>${esc(r.nome||'(senza nome)')}</b><span class="sub">${esc(r.info)}${ok?'':' · cellulare mancante'}</span></div>${st?`<span class="pill m">${st}</span>`:''}</label>`}).join(''):`<div class="empty">${t==='libero'?'Nessun cliente con cellulare.':'Niente da inviare adesso.'}</div>`;
  h+=`</div><div class="card"><h2>2 · Testo</h2><textarea id="mt">${esc(msg.text)}</textarea><div class="sub" style="margin:6px 0">Puoi usare <b>{nome}</b> (nome del cliente) e <b>{negozio}</b>.</div><div style="display:flex;gap:8px"><button class="btn s o" id="mSave">Salva come modello</button><button class="btn s o" id="mReset">Ripristina</button></div>`;
  if(selR[0])h+=`<div class="sub" style="margin-top:10px">Anteprima per ${esc(selR[0].nome||'il primo')}:</div><div class="prev">${esc(fill(msg.text,selR[0],false))}</div>`;
- h+=`</div><div class="card"><h2>3 · Come invio</h2><div class="sub">Il telefono apre il messaggio già scritto: tu premi Invia.</div>`;
- msg.mode='uno';
- if(msg.mode==='uno')h+=`<div class="seg"><button data-ch="sms" class="${msg.ch==='sms'?'on':''}">SMS</button><button data-ch="wa" class="${msg.ch==='wa'?'on':''}">WhatsApp</button></div><div class="sub">Un messaggio alla volta: ogni cliente riceve il suo, col suo nome, e nessuno vede i numeri degli altri.</div>`;
-
- h+=`<button class="btn w" id="mGo" style="margin-top:12px" ${selR.length?'':'disabled'}>${msg.mode==='uno'?'Inizia l’invio':'Prepara il messaggio'} (${selR.length})</button></div>`;
+ h+=`</div><div class="card"><h2>3 · Invio</h2><div class="sub">Un messaggio per volta, ognuno col nome del cliente. Il telefono apre il testo già scritto: tu premi Invia.</div><div class="seg"><button data-ch="sms" class="${msg.ch==='sms'?'on':''}">SMS</button><button data-ch="wa" class="${msg.ch==='wa'?'on':''}">WhatsApp</button></div><button class="btn w" id="mGo" style="margin-top:12px" ${selR.length?'':'disabled'}>Inizia l’invio (${selR.length})</button></div>`;
  m.insertAdjacentHTML('beforeend',h);
  m.querySelectorAll('[data-tp]').forEach(b=>b.onclick=()=>{keepText();pickTipo(b.dataset.tp);draw()});
+ m.querySelectorAll('[data-tg]').forEach(b=>b.onclick=()=>{keepText();msg.tag=b.dataset.tg;draw()});
  m.querySelectorAll('[data-rc]').forEach(c=>c.onchange=()=>{keepText();const r=rs.find(x=>x.id===c.dataset.rc);if(c.checked)msg.sel[r.id]={r};else delete msg.sel[r.id];draw()});
- m.querySelectorAll('[data-md]').forEach(b=>b.onclick=()=>{keepText();msg.mode=b.dataset.md;draw()});
  m.querySelectorAll('[data-ch]').forEach(b=>b.onclick=()=>{keepText();msg.ch=b.dataset.ch;draw()});
+ const sa=$('#selAll');if(sa){sa.onclick=()=>{keepText();rs.filter(r=>normTel(r.tel)).forEach(r=>msg.sel[r.id]={r});draw()};$('#selNone').onclick=()=>{keepText();msg.sel={};draw()}}
  const mq=$('#mq');if(mq)mq.oninput=()=>{keepText();msg.q=mq.value;clearTimeout(vMsg.tm);vMsg.tm=setTimeout(()=>{draw();const e=$('#mq');if(e){e.focus();e.setSelectionRange(e.value.length,e.value.length)}},300)};
  const ma=$('#madd');if(ma)ma.onclick=()=>{keepText();const n=normTel($('#mnum').value);if(!n){toast('Numero non valido');return}const r={id:'l|man|'+n,nome:'',tel:n,info:n,due:false,vars:{}};msg.sel[r.id]={r,extra:r};msg.manual='';draw()};
- $('#mSave').onclick=()=>{keepText();const s=LS.get('ac_tpl',{});s[t]=msg.text;LS.set('ac_tpl',s);toast('Modello salvato')};
- $('#mReset').onclick=()=>{const s=LS.get('ac_tpl',{});delete s[t];LS.set('ac_tpl',s);msg.text=DEF[t];draw()};
+ $('#mSave').onclick=()=>{keepText();if(t.startsWith('T:')){const tt=tipo(t.slice(2));tt.tpl=msg.text;save()}else{const s=LS.get('ac_tpl',{});s[t]=msg.text;LS.set('ac_tpl',s)}toast('Modello salvato')};
+ $('#mReset').onclick=()=>{if(t.startsWith('T:')){tipo(t.slice(2)).tpl=defTpl(t);save()}else{const s=LS.get('ac_tpl',{});delete s[t];LS.set('ac_tpl',s)}msg.text=defTpl(t);draw()};
  $('#mGo').onclick=()=>{keepText();if(!msg.text.trim()){toast('Scrivi il testo');return}startSend(selR)}}
 function keepText(){const e=$('#mt');if(e)msg.text=e.value;const n=$('#mnum');if(n)msg.manual=n.value}
-function startSend(list){
- const items=list.filter(r=>normTel(r.tel));if(!items.length)return;
- if(msg.mode==='tutti'){const body=fill(msg.text,items[0],true),tels=items.map(r=>normTel(r.tel));items.forEach(r=>markSent(r.id));location.href=smsHref(tels,body);setTimeout(draw,600);return}
- queue={items,i:0,ch:msg.ch,text:msg.text};drawQueue()}
+function startSend(list){const items=list.filter(r=>normTel(r.tel));if(!items.length)return;queue={items,i:0,ch:msg.ch,text:msg.text};drawQueue()}
 function drawQueue(){
  document.getElementById('qov')?.remove();if(!queue)return;
  const q=queue,done=q.i>=q.items.length,r=q.items[q.i],o=document.createElement('div');o.className='ov';o.id='qov';
@@ -213,66 +255,92 @@ function drawQueue(){
  if(!done){$('#qskip').onclick=()=>{q.i++;drawQueue()};$('#qgo').onclick=()=>{if(sendOne(r,fill(q.text,r,false),q.ch,r.id)){q.i++;setTimeout(drawQueue,500)}}}}
 
 function vClienti(m){
- const q=cq.trim().toLowerCase(),dq=q.replace(/\D/g,'');let l=S.clienti.slice().sort((a,b)=>a.nome.localeCompare(b.nome,'it'));if(q)l=l.filter(c=>c.nome.toLowerCase().includes(q)||(dq.length>=3&&String(c.tel).replace(/\D/g,'').includes(dq)));
- m.insertAdjacentHTML('beforeend',`<div style="display:flex;gap:8px;margin-bottom:10px"><input id="cq" placeholder="Cerca per nome o numero" value="${esc(cq)}"><button class="btn" data-act="newCli" style="flex:none">＋</button></div>${navigator.contacts&&navigator.contacts.select?'<button class="btn o w" style="margin-bottom:10px" data-act="rubrica">📇 Importa dalla rubrica del telefono</button>':''}<div class="sub" style="margin:0 2px 8px">${l.length} clienti${l.length>80?' (mostro i primi 80)':''}</div><div class="card" style="padding:4px 14px">${l.slice(0,80).map(c=>`<div class="row" data-cl="${c.id}"><div class="x"><b>${esc(c.nome)}</b><span class="sub">${esc(c.tel)||'senza numero'}${c.nasc?' · 🎂 '+fmtD(c.nasc).slice(0,5):''}</span></div><span class="sub">›</span></div>`).join('')||'<div class="empty">Nessun cliente. Premi ＋ per aggiungerne uno.</div>'}</div>`);
+ const q=cq.trim().toLowerCase(),dq=q.replace(/\D/g,'');let l=S.clienti.slice().sort((a,b)=>a.nome.localeCompare(b.nome,'it'));if(ctag)l=l.filter(c=>(c.tags||[]).includes(ctag));if(q)l=l.filter(c=>c.nome.toLowerCase().includes(q)||(dq.length>=3&&String(c.tel).replace(/\D/g,'').includes(dq)));
+ m.insertAdjacentHTML('beforeend',`<div style="display:flex;gap:8px;margin-bottom:10px"><input id="cq" placeholder="Cerca per nome o numero" value="${esc(cq)}"><button class="btn" data-act="newCli" style="flex:none">＋</button></div>${S.tags.length?`<div class="chips"><button data-ct="" class="${ctag?'':'on'}">Tutti</button>${S.tags.map(g=>`<button data-ct="${esc(g)}" class="${ctag===g?'on':''}">${esc(g)}</button>`).join('')}</div>`:''}${navigator.contacts&&navigator.contacts.select?'<button class="btn o w" style="margin-bottom:10px" data-act="rubrica">📇 Importa dalla rubrica del telefono</button>':''}<div class="sub" style="margin:0 2px 8px">${l.length} clienti${l.length>80?' (mostro i primi 80)':''}</div><div class="card" style="padding:4px 14px">${l.slice(0,80).map(c=>`<div class="row" data-cl="${c.id}"><div class="x"><b>${esc(c.nome)}</b><span class="sub">${esc(c.tel)||'senza numero'}${c.nasc?' · 🎂 '+fmtD(c.nasc).slice(0,5):''}${(c.tags||[]).length?' · '+esc(c.tags.join(', ')):''}</span></div><span class="sub">›</span></div>`).join('')||'<div class="empty">Nessun cliente. Premi ＋ per aggiungerne uno.</div>'}</div>`);
  const e=$('#cq');e.oninput=()=>{cq=e.value;clearTimeout(vClienti.tm);vClienti.tm=setTimeout(()=>{draw();const x=$('#cq');x.focus();x.setSelectionRange(x.value.length,x.value.length)},250)};
+ m.querySelectorAll('[data-ct]').forEach(b=>b.onclick=()=>{ctag=b.dataset.ct;draw()});
  m.querySelectorAll('[data-cl]').forEach(r=>r.onclick=()=>clienteSheet(cli(r.dataset.cl)));bind(m)}
 function clienteSheet(c){
- const tel=normTel(c.tel),rp=S.rip.filter(x=>x.cid===c.id),ct=S.contr.filter(x=>x.cid===c.id);
- const o=sheet(`<h3>${esc(c.nome)}</h3><div class="sub">${esc(c.tel)||'senza numero'}${c.nasc?' · nato il '+fmtD(c.nasc):''}</div>${c.note?`<div class="prev">${esc(c.note)}</div>`:''}
+ const tel=normTel(c.tel),sc=S.schede.filter(x=>x.cid===c.id);
+ const o=sheet(`<h3>${esc(c.nome)}</h3><div class="sub">${esc(c.tel)||'senza numero'}${c.nasc?' · nato il '+fmtD(c.nasc):''}</div>${(c.tags||[]).length?`<div style="margin-top:6px">${c.tags.map(g=>`<span class="pill">${esc(g)}</span>`).join(' ')}</div>`:''}${c.note?`<div class="prev">${esc(c.note)}</div>`:''}
  ${tel?`<div style="display:flex;gap:8px;margin:12px 0"><a class="btn o" style="flex:1;text-align:center;text-decoration:none" href="tel:${tel}">📞 Chiama</a><button class="btn o" style="flex:1" id="cSms">✉️ Scrivi</button><a class="btn o" style="flex:1;text-align:center;text-decoration:none" target="_blank" rel="noopener" href="https://wa.me/${tel.replace('+','')}">WhatsApp</a></div>`:''}
- <h2 style="font-size:15px;margin:14px 0 4px">Riparazioni</h2>${rp.length?rp.map(x=>`<div class="row" data-er="${x.id}"><div class="x"><b>${esc(x.disp)}</b><span class="sub">${fmtD(x.data)} · ${esc(x.guasto||'')}</span></div><span class="pill ${x.stato==='pronto'?'':'m'}">${ST[x.stato]}</span></div>`).join(''):'<div class="sub">Nessuna.</div>'}
- <h2 style="font-size:15px;margin:14px 0 4px">Contratti</h2>${ct.length?ct.map(x=>`<div class="row" data-ec="${x.id}"><div class="x"><b>${esc(x.tipo)} ${esc(x.gestore||'')}</b><span class="sub">dal ${fmtD(x.inizio)} · da ricontattare il ${fmtD(scadOf(x))}</span></div></div>`).join(''):'<div class="sub">Nessuno.</div>'}
- <div style="display:flex;gap:8px;margin-top:14px"><button class="btn o" style="flex:1" id="cNR">＋ Riparazione</button><button class="btn o" style="flex:1" id="cNC">＋ Contratto</button></div>
- <button class="btn o w" style="margin-top:10px" id="cEd">Modifica cliente</button><button class="btn o w" style="margin-top:10px" id="cClose">Chiudi</button>`);
- $('#cClose').onclick=()=>o.remove();$('#cEd').onclick=()=>editCliente(c);$('#cNR').onclick=()=>editRip(null,c.id);$('#cNC').onclick=()=>editContr(null,c.id);
- o.querySelectorAll('[data-er]').forEach(r=>r.onclick=()=>editRip(S.rip.find(x=>x.id===r.dataset.er)));o.querySelectorAll('[data-ec]').forEach(r=>r.onclick=()=>editContr(S.contr.find(x=>x.id===r.dataset.ec)));
- const s=$('#cSms');if(s)s.onclick=()=>{o.remove();tab='msg';msg.tipo='libero';msg.sel={};msg.text=tpl('libero');const r={id:'l|'+c.id,nome:c.nome,tel:c.tel,info:c.tel,due:false,vars:{}};msg.sel[r.id]={r,extra:r};msg.q=c.nome;draw();scrollTo(0,0)}}
+ <h2 style="font-size:15px;margin:14px 0 4px">Schede</h2>${sc.length?sc.map(x=>{const t=tipo(x.tid)||{nome:'?',icona:'📄',modo:'lavoro'};return `<div class="row" data-es="${x.id}"><div class="x"><b>${esc(t.icona||'')} ${esc(t.nome)} · ${esc(x.titolo||'')}</b><span class="sub">${t.modo==='lavoro'?fmtD(x.data)+(x.dettaglio?' · '+esc(x.dettaglio):''):'da ricontattare il '+fmtD(scadOf(x))}</span></div>${t.modo==='lavoro'?`<span class="pill ${x.stato==='pronto'?'':'m'}">${ST[x.stato]}</span>`:''}</div>`}).join(''):'<div class="sub">Nessuna.</div>'}
+ ${S.tipi.length?`<div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap">${S.tipi.map(t=>`<button class="btn o s" data-nt="${t.id}">＋ ${esc(t.icona||'')} ${esc(t.nome)}</button>`).join('')}</div>`:''}
+ <button class="btn o w" style="margin-top:12px" id="cEd">Modifica cliente</button><button class="btn o w" style="margin-top:10px" id="cClose">Chiudi</button>`);
+ $('#cClose').onclick=()=>o.remove();$('#cEd').onclick=()=>editCliente(c);
+ o.querySelectorAll('[data-nt]').forEach(b=>b.onclick=()=>editScheda(null,b.dataset.nt,c.id));
+ o.querySelectorAll('[data-es]').forEach(r=>r.onclick=()=>editScheda(S.schede.find(x=>x.id===r.dataset.es)));
+ const s=$('#cSms');if(s)s.onclick=()=>{o.remove();tab='msg';msg.tipo='libero';msg.sel={};msg.tag='';msg.text=tpl('libero');const r={id:'l|'+c.id,nome:c.nome,tel:c.tel,info:c.tel,due:false,vars:{}};msg.sel[r.id]={r,extra:r};msg.q=c.nome;draw();scrollTo(0,0)}}
 
-function vRip(m){
- const g=st=>S.rip.filter(x=>x.stato===st).sort((a,b)=>String(b.data).localeCompare(String(a.data))),sec=(t,l,kind)=>`<div class="card"><h2>${t} <span class="pill m">${l.length}</span></h2>${l.length?l.slice(0,kind==='rit'?20:200).map(x=>{const k='r|'+x.id+'|'+(x.pronto||''),c=cli(x.cid);return `<div class="row"><div class="x" data-er="${x.id}"><b>${esc(c.nome)} · ${esc(x.disp)}</b><span class="sub">${esc(x.guasto||'')} · ${fmtD(x.data)}${Number(x.prezzo)?' · '+eur(x.prezzo):''} ${kind==='pronto'?sentTxt(k):''}</span></div>${kind==='lav'?`<button class="btn s o" data-act="ripPronto" data-id="${x.id}">Pronta</button>`:kind==='pronto'?`<button class="btn s ${isSent(k)?'o':''}" data-act="rip" data-id="${x.id}">${isSent(k)?'Reinvia':'Avvisa'}</button><button class="btn s o" data-act="ripRit" data-id="${x.id}">Ritirata</button>`:''}</div>`}).join(''):'<div class="empty">Nessuna.</div>'}</div>`;
- m.insertAdjacentHTML('beforeend',`<button class="btn w" style="margin-bottom:12px" data-act="newRip">＋ Nuova riparazione</button>`+sec('✅ Pronte da riconsegnare',g('pronto'),'pronto')+sec('🔧 In lavorazione',g('lavorazione'),'lav')+sec('📦 Ritirate',g('ritirato'),'rit'));
- m.querySelectorAll('[data-er]').forEach(r=>r.onclick=()=>editRip(S.rip.find(x=>x.id===r.dataset.er)));bind(m)}
-
-function vContr(m){
- const g=Number(S.shop.giorni)||30,l=S.contr.map(x=>({x,d:scadOf(x),gg:daysTo(scadOf(x))})).sort((a,b)=>a.d.localeCompare(b.d));
- m.insertAdjacentHTML('beforeend',`<button class="btn w" style="margin-bottom:12px" data-act="newContr">＋ Nuovo contratto</button><div class="sub" style="margin:0 2px 8px">Luce, gas, fibra e altri contratti: l’app ti avvisa ${g} giorni prima della data in cui ricontattare il cliente.</div><div class="card" style="padding:4px 14px">${l.map(o=>{const c=cli(o.x.cid),k='s|'+o.x.id+'|'+o.d,due=o.gg<=g;return `<div class="row"><div class="x" data-ec="${o.x.id}"><b>${esc(c.nome)} · ${esc(o.x.tipo)} ${esc(o.x.gestore||'')}</b><span class="sub">dal ${fmtD(o.x.inizio)} · ${o.gg<0?'da ricontattare dal':'da ricontattare il'} ${fmtD(o.d)} ${sentTxt(k)}</span></div>${due?`<button class="btn s ${isSent(k)?'o':''}" data-act="scad" data-id="${o.x.id}">${isSent(k)?'Reinvia':'Avvisa'}</button>`:`<span class="pill m">tra ${o.gg} gg</span>`}</div>`}).join('')||'<div class="empty">Nessun contratto inserito.</div>'}</div>`);
- m.querySelectorAll('[data-ec]').forEach(r=>r.onclick=()=>editContr(S.contr.find(x=>x.id===r.dataset.ec)));bind(m)}
+function vSchede(m){
+ if(!S.tipi.length){m.insertAdjacentHTML('beforeend',`<div class="card"><div class="empty">Non hai ancora nessun tipo di scheda (riparazioni, contratti, tagliandi…).</div><button class="btn w" data-act="settings">Creali nelle impostazioni</button></div>`);bind(m);return}
+ if(!tipo(stipo))stipo=S.tipi[0].id;const t=tipo(stipo);
+ let h=`<div class="chips">${S.tipi.map(x=>`<button data-st="${x.id}" class="${x.id===stipo?'on':''}">${esc(x.icona||'')} ${esc(x.nome)}</button>`).join('')}</div><button class="btn w" style="margin-bottom:12px" data-act="newScheda">＋ Nuova scheda · ${esc(t.nome)}</button>`;
+ const all=S.schede.filter(x=>x.tid===t.id);
+ if(t.modo==='lavoro'){
+  const g=st=>all.filter(x=>x.stato===st).sort((a,b)=>String(b.data).localeCompare(String(a.data))),
+  sec=(ti,l,kind)=>`<div class="card"><h2>${ti} <span class="pill m">${l.length}</span></h2>${l.length?l.slice(0,kind==='rit'?20:200).map(x=>{const k='r|'+x.id+'|'+(x.pronto||''),c=cli(x.cid);return `<div class="row"><div class="x" data-es="${x.id}"><b>${esc(c.nome)} · ${esc(x.titolo||'')}</b><span class="sub">${esc(x.dettaglio||'')} · ${fmtD(x.data)}${Number(x.prezzo)?' · '+eur(x.prezzo):''} ${kind==='pronto'?sentTxt(k):''}</span></div>${kind==='lav'?`<button class="btn s o" data-act="pronto" data-id="${x.id}">Pronta</button>`:kind==='pronto'?`<button class="btn s ${isSent(k)?'o':''}" data-act="avvisa" data-id="${x.id}">${isSent(k)?'Reinvia':'Avvisa'}</button><button class="btn s o" data-act="ritirata" data-id="${x.id}">Ritirata</button>`:''}</div>`}).join(''):'<div class="empty">Nessuna.</div>'}</div>`;
+  h+=sec('✅ Pronte da riconsegnare',g('pronto'),'pronto')+sec('🔧 In lavorazione',g('lavorazione'),'lav')+sec('📦 Ritirate',g('ritirato'),'rit')}
+ else{
+  const g=Number(t.giorni)||30,l=all.map(x=>({x,d:scadOf(x),gg:daysTo(scadOf(x))})).sort((a,b)=>a.d.localeCompare(b.d));
+  h+=`<div class="sub" style="margin:0 2px 8px">L’app ti avvisa ${g} giorni prima della data da ricontattare.</div><div class="card" style="padding:4px 14px">${l.map(o=>{const c=cli(o.x.cid),k='s|'+o.x.id+'|'+o.d,due=o.gg<=g;return `<div class="row"><div class="x" data-es="${o.x.id}"><b>${esc(c.nome)} · ${esc(o.x.titolo||'')} ${esc(o.x.fornitore||'')}</b><span class="sub">dal ${fmtD(o.x.inizio)} · ${o.gg<0?'da ricontattare dal':'da ricontattare il'} ${fmtD(o.d)} ${sentTxt(k)}</span></div>${due?`<button class="btn s ${isSent(k)?'o':''}" data-act="avvisa" data-id="${o.x.id}">${isSent(k)?'Reinvia':'Avvisa'}</button>`:`<span class="pill m">tra ${o.gg} gg</span>`}</div>`}).join('')||'<div class="empty">Nessuna scheda inserita.</div>'}</div>`}
+ m.insertAdjacentHTML('beforeend',h);
+ m.querySelectorAll('[data-st]').forEach(b=>b.onclick=()=>{stipo=b.dataset.st;draw()});
+ m.querySelectorAll('[data-es]').forEach(r=>r.onclick=()=>editScheda(S.schede.find(x=>x.id===r.dataset.es)));bind(m)}
 
 /* ---------- azioni ---------- */
 function bind(m){m.querySelectorAll('[data-act]').forEach(b=>b.onclick=async()=>{const a=b.dataset.act,id=b.dataset.id;
- if(a==='newCli')editCliente();else if(a==='newRip')editRip();else if(a==='newContr')editContr();
+ if(a==='newCli')editCliente();else if(a==='newScheda')editScheda(null,stipo);else if(a==='settings')settings();
  else if(a==='auguri'){const c=cli(id),r={nome:c.nome,tel:c.tel,vars:{}},k='a|'+c.id+'|'+new Date().getFullYear();if(sendOne(r,fill(tpl('auguri'),r,false),'sms',k))setTimeout(draw,500)}
- else if(a==='rip'){const r=recipients('rip').find(v=>v.id.startsWith('r|'+id+'|'));if(r&&sendOne(r,fill(tpl('rip'),r,false),'sms',r.id))setTimeout(draw,500)}
- else if(a==='scad'){const x=S.contr.find(v=>v.id===id),c=cli(x.cid),d=scadOf(x),r={nome:c.nome,tel:c.tel,vars:{contratto:(x.tipo+' '+(x.gestore||'')).trim(),data:fmtD(d)}};if(sendOne(r,fill(tpl('scad'),r,false),'sms','s|'+x.id+'|'+d))setTimeout(draw,500)}
- else if(a==='ripPronto'){const x=S.rip.find(v=>v.id===id);x.stato='pronto';x.pronto=todayIso();save();draw();toast('Segnata pronta: premi Avvisa per scrivere al cliente')}
- else if(a==='ripRit'){const x=S.rip.find(v=>v.id===id);x.stato='ritirato';x.ritiro=todayIso();save();draw()}
- else if(a==='gotoScad'){tab='contr';draw();scrollTo(0,0)}
- else if(a==='rubrica'){try{const cs=await navigator.contacts.select(['name','tel'],{multiple:true});let n=0;for(const k of cs){const nome=tc((k.name||[])[0]||''),tel=String((k.tel||[])[0]||'').replace(/\s+/g,'');if(!nome)continue;if(S.clienti.find(c=>c.nome===nome&&c.tel===tel))continue;S.clienti.push({id:uid(),nome,tel,nasc:'',note:''});n++}save();draw();toast(n+' clienti importati')}catch(e){toast('Importazione annullata')}}})}
+ else if(a==='avvisa'){const x=S.schede.find(v=>v.id===id),t=tipo(x.tid),o=dueItems(t).find(v=>v.x.id===id);if(!o)return;const r=recOf(o);if(sendOne(r,fill(t.tpl||defTpl('T:'+t.id),r,false),'sms',r.id))setTimeout(draw,500)}
+ else if(a==='pronto'){const x=S.schede.find(v=>v.id===id);x.stato='pronto';x.pronto=todayIso();save();draw();toast('Segnata pronta: premi Avvisa per scrivere al cliente')}
+ else if(a==='ritirata'){const x=S.schede.find(v=>v.id===id);x.stato='ritirato';x.ritiro=todayIso();save();draw()}
+ else if(a==='gotoMsg'){tab='msg';pickTipo('T:'+id);draw();scrollTo(0,0)}
+ else if(a==='rubrica'){try{const cs=await navigator.contacts.select(['name','tel'],{multiple:true});let n=0;for(const k of cs){const nome=tc((k.name||[])[0]||''),tel=String((k.tel||[])[0]||'').replace(/\s+/g,'');if(!nome)continue;if(S.clienti.find(c=>c.nome===nome&&c.tel===tel))continue;S.clienti.push({id:uid(),nome,tel,nasc:'',note:'',tags:[]});n++}save();draw();toast(n+' clienti importati')}catch(e){toast('Importazione annullata')}}})}
+
+/* ---------- primo avvio ---------- */
+function welcome(){
+ const o=sheet(`<h3>Benvenuto 👋</h3><div class="sub">Due domande e sei pronto. Potrai cambiare tutto dalle impostazioni ⚙️.</div><div class="sub fl">Nome del tuo negozio</div><input id="wN" placeholder="es. Riparazioni Rossi"><div class="sub fl">Indirizzo (facoltativo, compare nei messaggi)</div><input id="wI" placeholder="es. Via Roma 1, Udine"><div class="sub fl">Che tipo di attività hai?</div><select id="wP">${Object.entries(PRESETS).map(([k,p])=>`<option value="${k}">${esc(p.nome)}</option>`).join('')}</select><div class="sub" style="margin-top:6px">Sceglie i tipi di scheda e i testi di partenza; puoi aggiungerne o crearne altri quando vuoi.</div><button class="btn w" style="margin-top:14px" id="wGo">Inizia</button>`);
+ o.onclick=null;
+ $('#wGo').onclick=()=>{const p=PRESETS[$('#wP').value];S.shop.nome=$('#wN').value.trim();S.shop.indirizzo=$('#wI').value.trim();S.tags=p.tags.slice();S.tipi=p.tipi.map(t=>cloneTipo(t));save();o.remove();draw()}}
 
 /* ---------- impostazioni e backup ---------- */
 function settings(){
  const o=sheet(`<h3>Impostazioni</h3>
- <h2 style="font-size:15px;margin:14px 0 4px">Il tuo negozio</h2><div class="sub">Compare nei messaggi al posto di {negozio}.</div>
- <div class="sub fl">Nome del negozio</div><input id="sN" value="${esc(S.shop.nome)}" placeholder="es. Riparazioni Rossi"><div class="sub fl">Indirizzo (facoltativo)</div><input id="sI" value="${esc(S.shop.indirizzo)}" placeholder="es. Via Roma 1, Udine"><div class="sub fl">Avvisami dei contratti quanti giorni prima</div><input id="sG" type="number" inputmode="numeric" value="${esc(S.shop.giorni||30)}">
- <h2 style="font-size:15px;margin:18px 0 4px">Modelli dei messaggi</h2><div class="sub">Usa {nome}, {negozio}, {indirizzo}, {contratto}, {data}, {dispositivo}, {importo}.</div>
- ${TIPI.map(([k,i,n])=>`<div class="sub fl"><b>${i} ${n}</b></div><textarea data-tp2="${k}" style="min-height:84px">${esc(tpl(k))}</textarea>`).join('')}
+ <h2 style="font-size:15px;margin:14px 0 4px">Il tuo negozio</h2><div class="sub">Compare nei messaggi al posto di {negozio} e {indirizzo}.</div>
+ <div class="sub fl">Nome del negozio</div><input id="sN" value="${esc(S.shop.nome)}" placeholder="es. Riparazioni Rossi"><div class="sub fl">Indirizzo (facoltativo)</div><input id="sI" value="${esc(S.shop.indirizzo)}" placeholder="es. Via Roma 1, Udine">
+ <h2 style="font-size:15px;margin:18px 0 4px">Categorie dei clienti</h2><div class="sub">Servono per ordinare i clienti e scrivere solo a un gruppo.</div>
+ <div class="chips" style="flex-wrap:wrap;overflow:visible;margin-top:8px">${S.tags.map(g=>`<button class="tagc on" data-deltag="${esc(g)}">${esc(g)} ✕</button>`).join('')||'<span class="sub">Nessuna categoria.</span>'}</div>
+ <div style="display:flex;gap:8px"><input id="sTag" placeholder="＋ nuova categoria" style="padding:8px 10px"><button class="btn s o" id="sTagAdd">Aggiungi</button></div>
+ <h2 style="font-size:15px;margin:18px 0 4px">Tipi di scheda</h2><div class="sub">Ogni tipo ha il suo elenco, i suoi campi e il suo messaggio (riparazioni, contratti, tagliandi…).</div>
+ ${S.tipi.map(t=>`<div class="row" data-et="${t.id}"><div class="x"><b>${esc(t.icona||'')} ${esc(t.nome)}</b><span class="sub">${t.modo==='lavoro'?'Lavoro da riconsegnare':'Scadenza dopo '+t.mesi+' mesi, avviso '+t.giorni+' giorni prima'}</span></div><span class="sub">✎</span></div>`).join('')}
+ <button class="btn o w" style="margin-top:10px" id="sNewT">＋ Nuovo tipo di scheda</button>
+ <div class="sub fl">Usi l’app per più negozi? Aggiungi i tipi di un’altra attività:</div><div style="display:flex;gap:8px"><select id="sPre">${Object.entries(PRESETS).map(([k,p])=>`<option value="${k}">${esc(p.nome)}</option>`).join('')}</select><button class="btn s o" id="sPreAdd">Aggiungi</button></div>
+ <h2 style="font-size:15px;margin:18px 0 4px">Altri modelli di messaggio</h2><div class="sub">I testi di ogni tipo di scheda si cambiano dal tipo stesso. Usa {nome} e {negozio}.</div>
+ ${[['auguri','🎂 Auguri'],['libero','✏️ Messaggio libero']].map(([k,n])=>`<div class="sub fl"><b>${n}</b></div><textarea data-tp2="${k}" style="min-height:84px">${esc(tpl(k))}</textarea>`).join('')}
  <button class="btn w" style="margin-top:12px" id="sSave">Salva</button>
  <h2 style="font-size:15px;margin:18px 0 4px">Copia di sicurezza</h2><div class="sub">I dati stanno solo su questo telefono: salva ogni tanto una copia (su Drive, email…). Serve anche per passare a un telefono nuovo.</div>
  <button class="btn o w" style="margin-top:10px" id="sExp">⬇️ Salva una copia dei dati</button><button class="btn o w" style="margin-top:10px" id="sImp">⬆️ Ripristina da una copia</button><input id="sFl" type="file" accept=".json,application/json" style="display:none">
  <button class="btn o w" style="margin-top:10px" id="sX">Chiudi</button>`);
+ const back=()=>{draw();settings()};
  $('#sX').onclick=()=>o.remove();
- $('#sSave').onclick=()=>{S.shop.nome=$('#sN').value.trim();S.shop.indirizzo=$('#sI').value.trim();S.shop.giorni=Math.max(0,Number($('#sG').value)||30);const s={};o.querySelectorAll('[data-tp2]').forEach(t=>{if(t.value.trim()&&t.value!==DEF[t.dataset.tp2])s[t.dataset.tp2]=t.value});LS.set('ac_tpl',s);save();msg.text=tpl(msg.tipo||'libero');toast('Salvato');o.remove();draw()};
+ o.querySelectorAll('[data-deltag]').forEach(b=>b.onclick=()=>{const g=b.dataset.deltag;if(!confirm('Eliminare la categoria «'+g+'»? Resta nei clienti solo il resto.'))return;S.tags=S.tags.filter(x=>x!==g);S.clienti.forEach(c=>c.tags=(c.tags||[]).filter(x=>x!==g));save();back()});
+ $('#sTagAdd').onclick=()=>{const n=tc($('#sTag').value);if(!n)return;if(!S.tags.includes(n))S.tags.push(n);save();back()};
+ o.querySelectorAll('[data-et]').forEach(r=>r.onclick=()=>editTipo(tipo(r.dataset.et),back));
+ $('#sNewT').onclick=()=>editTipo(null,back);
+ $('#sPreAdd').onclick=()=>{const p=PRESETS[$('#sPre').value];let n=0;for(const t of p.tipi)if(!S.tipi.some(x=>x.nome===t.nome)){S.tipi.push(cloneTipo(t));n++}for(const g of p.tags)if(!S.tags.includes(g))S.tags.push(g);save();toast(n?n+' tipi aggiunti':'Questi tipi ci sono già');back()};
+ $('#sSave').onclick=()=>{S.shop.nome=$('#sN').value.trim();S.shop.indirizzo=$('#sI').value.trim();const s={};o.querySelectorAll('[data-tp2]').forEach(t=>{if(t.value.trim()&&t.value!==DEF[t.dataset.tp2])s[t.dataset.tp2]=t.value});LS.set('ac_tpl',s);save();msg.text=msg.tipo?tpl(msg.tipo):'';toast('Salvato');o.remove();draw()};
  $('#sExp').onclick=async()=>{const txt=JSON.stringify({app:'avvisa-clienti',at:new Date().toISOString(),data:S,tpl:LS.get('ac_tpl',{}),sent:sent()}),name='avvisa-clienti-backup-'+todayIso()+'.json';
   try{const f=new File([txt],name,{type:'application/json'});if(navigator.canShare&&navigator.canShare({files:[f]})){await navigator.share({files:[f],title:name});LS.set('ac_bk',Date.now());return}}catch(e){if(e&&e.name==='AbortError')return}
   const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([txt],{type:'application/json'}));a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},1500);LS.set('ac_bk',Date.now());toast('Copia salvata')};
  $('#sImp').onclick=()=>$('#sFl').click();
- $('#sFl').onchange=async()=>{const f=$('#sFl').files[0];if(!f)return;try{const j=JSON.parse(await f.text());if(j.app!=='avvisa-clienti'||!j.data||!Array.isArray(j.data.clienti))throw 0;if(!confirm('Sostituire i dati di questo telefono con quelli della copia del '+fmtD(String(j.at).slice(0,10))+' ('+j.data.clienti.length+' clienti)?'))return;S=j.data;save();LS.set('ac_tpl',j.tpl||{});LS.set('ac_sent',j.sent||{});o.remove();draw();toast('Dati ripristinati')}catch(e){toast('Questo file non è una copia valida')}}}
+ $('#sFl').onchange=async()=>{const f=$('#sFl').files[0];if(!f)return;try{const j=JSON.parse(await f.text());if(j.app!=='avvisa-clienti'||!j.data||!Array.isArray(j.data.clienti))throw 0;if(!confirm('Sostituire i dati di questo telefono con quelli della copia del '+fmtD(String(j.at).slice(0,10))+' ('+j.data.clienti.length+' clienti)?'))return;LS.set('ac_tpl',j.tpl||{});S=migrate(j.data);S.tags=S.tags||[];save();LS.set('ac_sent',j.sent||{});o.remove();draw();toast('Dati ripristinati')}catch(e){toast('Questo file non è una copia valida')}}}
 
 if('serviceWorker' in navigator&&location.protocol.startsWith('http'))navigator.serviceWorker.register('sw.js').catch(()=>{});
 if(navigator.storage&&navigator.storage.persist)navigator.storage.persist().catch(()=>{});
 draw();
-if(!S.shop.nome&&!S.clienti.length)setTimeout(settings,300);
+if(!S.tipi.length&&!S.clienti.length)setTimeout(welcome,200);
+
 </script>
 </body>
 </html>
