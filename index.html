@@ -142,7 +142,7 @@ function showLock(err){
 }
 
 /* ---------- disegno ---------- */
-const TABS=[['oggi','🏠','Oggi'],['msg','✉️','Messaggi'],['clienti','👥','Clienti'],['rip','🛠️','Riparazioni'],['ric','🧾','Ricevute']];
+const TABS=[['oggi','🏠','Oggi'],['msg','✉️','Messaggi'],['clienti','👥','Clienti'],['rip','🛠️','Riparazioni'],['ric','🧾','Ricevute'],['fed','🎟️','Fedeltà']];
 function badges(){const t=new Date(),iso=todayIso();const b=D.comp.filter(c=>c.m===t.getMonth()+1&&c.g===t.getDate()&&!isSent('a|'+c.k+'|'+t.getFullYear())).length,r=D.rip.filter(x=>x.st==='pronto'&&!isSent('r|'+x.id+'|'+x.pronto)).length;return{oggi:b+r}}
 function draw(){
  if(locked||!D)return;
@@ -151,7 +151,7 @@ function draw(){
  $('#bLock').onclick=()=>showLock('');$('#bSet').onclick=settings;
  document.querySelectorAll('nav [data-t]').forEach(b=>b.onclick=()=>{tab=b.dataset.t;if(tab==='msg'&&!msg.tipo)pickTipo('libero');draw();scrollTo(0,0)});
  const m=$('#main');if(age>2)m.insertAdjacentHTML('beforeend',`<div class="warn">⚠️ I dati sono vecchi di ${Math.floor(age)} giorni. Dal gestionale aggiorna il file e poi qui: ⚙️ → Aggiorna dati.</div>`);
- ({oggi:vOggi,msg:vMsg,clienti:vClienti,rip:vRip,ric:vRic})[tab](m)}
+ ({oggi:vOggi,msg:vMsg,clienti:vClienti,rip:vRip,ric:vRic,fed:vFed})[tab](m)}
 
 function vOggi(m){
  const t=new Date(),yr=t.getFullYear(),bo=D.comp.filter(c=>c.m===t.getMonth()+1&&c.g===t.getDate()),rp=D.rip.filter(x=>x.st==='pronto'),sc=D.scad.filter(x=>x.late),rc=D.ric.filter(x=>x.date===todayIso());
@@ -218,6 +218,19 @@ function clienteSheet(c){
  <button class="btn o w" style="margin-top:14px" id="cClose">Chiudi</button>`);
  $('#cClose').onclick=()=>o.remove();
  const s=$('#cSms');if(s)s.onclick=()=>{o.remove();tab='msg';msg.tipo='libero';msg.sel={};msg.q='';msg.text=tpl('libero');const r={id:'l|'+n9(c.t)+c.n,nome:c.n,tel:c.t,info:c.t,due:false,vars:{}};msg.sel[r.id]={r,extra:r};msg.q=c.n;draw();scrollTo(0,0)}}
+
+
+let fq='';
+const fDots=(st,n)=>{let h='<span style="display:inline-flex;gap:3px;flex-wrap:wrap">';for(let i=1;i<=n;i++)h+=`<span style="width:13px;height:13px;border-radius:50%;border:${i===n?2.5:1.5}px solid #1d2b36;background:${i<=st?'#1d2b36':'#fff'};display:inline-block"></span>`;return h+'</span>'};
+function fedL(){const F=D.fed;if(!F)return null;return{n:F.n||10,premio:F.premio||'',l:Object.entries(F.c||{}).map(([k,v])=>({k,st:v[0],cons:!!v[1],nome:v[2]||'Cliente',tel:v[3]||''}))}}
+function vFed(m){
+ const F=fedL();if(!F){m.insertAdjacentHTML('beforeend','<div class="card"><div class="empty">Nessun dato fedeltà. Rigenera il file del telefono dal gestionale.</div></div>');return}
+ const q=fq.trim().toLowerCase(),dq=q.replace(/\D/g,'');let l=F.l.filter(c=>!q||c.nome.toLowerCase().includes(q)||(dq.length>=3&&c.tel.replace(/\D/g,'').includes(dq)));
+ l.sort((a,b)=>((b.st>=F.n)-(a.st>=F.n))||(b.st-a.st)||a.nome.localeCompare(b.nome,'it'));const pr=F.l.filter(c=>c.st>=F.n).length;
+ m.insertAdjacentHTML('beforeend',`<div class="card"><h2>🎟️ Fedeltà Novatech</h2><div class="sub">Ogni ${F.n} timbri: <b>${esc(F.premio)}</b>. I timbri si danno dal gestionale (solo consultazione qui).</div><div style="margin-top:8px"></div><span class="pill ${pr?'a':'m'}">${pr} premi da consegnare</span></div><input id="fq" placeholder="Cerca per nome o numero" value="${esc(fq)}" style="margin-bottom:10px"><div class="sub" style="margin:0 2px 8px">${l.length} clienti con timbri${l.length>60?' (mostro i primi 60)':''}</div><div class="card" style="padding:4px 14px">${l.slice(0,60).map(c=>`<div class="row" data-fk="${esc(c.k)}"><div class="x"><b>${esc(c.nome)}</b><span class="sub">${esc(c.tel)||'senza numero'}</span><span style="margin-top:4px">${fDots(Math.min(c.st,F.n),F.n)}</span></div><b>${c.st}/${F.n}${c.st>=F.n?' 🎁':''}</b></div>`).join('')||'<div class="empty">Nessun cliente.</div>'}</div>`);
+ const e=$('#fq');e.oninput=()=>{fq=e.value;clearTimeout(vFed.tm);vFed.tm=setTimeout(()=>{draw();const x=$('#fq');x.focus();x.setSelectionRange(x.value.length,x.value.length)},250)};
+ m.querySelectorAll('[data-fk]').forEach(r=>r.onclick=()=>{const c=F.l.find(x=>x.k===r.dataset.fk);if(!c)return;const tel=normTel(c.tel),ok=c.st>=F.n&&c.cons&&tel;
+  const o=sheet(`<h3>${esc(c.nome)}</h3><div class="sub">${esc(c.tel)||'senza numero'}</div><div style="margin:14px 0">${fDots(Math.min(c.st,F.n),F.n)}</div><p><b>${c.st}/${F.n} timbri</b>${c.st>=F.n?' · 🎁 premio da consegnare: '+esc(F.premio):''}</p><div class="sub">Consenso comunicazioni commerciali: ${c.cons?'sì':'non registrato'}</div>${ok?`<a class="btn w" style="display:block;text-align:center;text-decoration:none;margin-top:12px" target="_blank" rel="noopener" href="https://wa.me/${tel.replace('+','')}?text=${encodeURIComponent('Buongiorno '+c.nome.split(' ')[0]+', la tua scheda fedeltà Novatech è completa! 🎁 Passa a ritirare il tuo premio: '+F.premio+'. A presto!')}">Avvisa su WhatsApp</a>`:''}<button class="btn o w" style="margin-top:10px" id="fClose">Chiudi</button>`);$('#fClose').onclick=()=>o.remove()})}
 
 function vRip(m){
  const g=(st)=>D.rip.filter(x=>x.st===st),sec=(t,l,btn)=>`<div class="card"><h2>${t} <span class="pill m">${l.length}</span></h2>${l.length?l.map(x=>{const k='r|'+x.id+'|'+x.pronto;return `<div class="row"><div class="x"><b>${esc(x.n)} · ${esc(x.disp)}</b><span class="sub">${esc(x.guasto)} · ${fmtD(x.data)}${x.prezzo?' · '+eur(x.prezzo):''} ${btn?sentTxt(k):''}</span></div>${btn&&x.t?`<button class="btn s ${isSent(k)?'o':''}" data-act="rip" data-id="${esc(x.id)}">${isSent(k)?'Reinvia':'Avvisa'}</button>`:''}</div>`}).join(''):'<div class="empty">Nessuna.</div>'}</div>`;
