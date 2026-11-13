@@ -142,8 +142,8 @@ function showLock(err){
 }
 
 /* ---------- disegno ---------- */
-const TABS=[['oggi','🏠','Oggi'],['msg','✉️','Messaggi'],['clienti','👥','Clienti'],['rip','🛠️','Riparazioni'],['ric','🧾','Ricevute'],['fed','🎟️','Fedeltà']];
-function badges(){const t=new Date(),iso=todayIso();const b=D.comp.filter(c=>c.m===t.getMonth()+1&&c.g===t.getDate()&&!isSent('a|'+c.k+'|'+t.getFullYear())).length,r=D.rip.filter(x=>x.st==='pronto'&&!isSent('r|'+x.id+'|'+x.pronto)).length;return{oggi:b+r}}
+const TABS=[['oggi','🏠','Oggi'],['msg','✉️','Messaggi'],['clienti','👥','Clienti'],['rip','🛠️','Riparazioni'],['ric','🧾','Ricevute'],['ord','📦','Ordini'],['fed','🎟️','Fedeltà']];
+function badges(){const t=new Date(),iso=todayIso();const b=D.comp.filter(c=>c.m===t.getMonth()+1&&c.g===t.getDate()&&!isSent('a|'+c.k+'|'+t.getFullYear())).length,r=D.rip.filter(x=>x.st==='pronto'&&!isSent('r|'+x.id+'|'+x.pronto)).length;return{oggi:b+r,ord:(D.ord||[]).filter(x=>x.st==='arrivato'&&!isSent('o|'+x.id)).length}}
 function draw(){
  if(locked||!D)return;
  const bd=badges(),age=(Date.now()-new Date(D.at).getTime())/86400000;
@@ -151,7 +151,7 @@ function draw(){
  $('#bLock').onclick=()=>showLock('');$('#bSet').onclick=settings;
  document.querySelectorAll('nav [data-t]').forEach(b=>b.onclick=()=>{tab=b.dataset.t;if(tab==='msg'&&!msg.tipo)pickTipo('libero');draw();scrollTo(0,0)});
  const m=$('#main');if(age>2)m.insertAdjacentHTML('beforeend',`<div class="warn">⚠️ I dati sono vecchi di ${Math.floor(age)} giorni. Dal gestionale aggiorna il file e poi qui: ⚙️ → Aggiorna dati.</div>`);
- ({oggi:vOggi,msg:vMsg,clienti:vClienti,rip:vRip,ric:vRic,fed:vFed})[tab](m)}
+ ({oggi:vOggi,msg:vMsg,clienti:vClienti,rip:vRip,ric:vRic,fed:vFed,ord:vOrd})[tab](m)}
 
 function vOggi(m){
  const t=new Date(),yr=t.getFullYear(),bo=D.comp.filter(c=>c.m===t.getMonth()+1&&c.g===t.getDate()),rp=D.rip.filter(x=>x.st==='pronto'),sc=D.scad.filter(x=>x.late),rc=D.ric.filter(x=>x.date===todayIso());
@@ -233,6 +233,22 @@ function vFed(m){
   const first=c.nome.split(' ')[0],rd=c.st>=F.n,dflt=rd?`Buongiorno ${first}, la tua scheda fedeltà Novatech è completa! 🎁 Passa a ritirare il tuo premio: ${F.premio}. A presto!`:`Buongiorno ${first}, hai ${c.st} timbri su ${F.n} sulla tua scheda fedeltà Novatech: te ne mancano ${F.n-c.st} per ottenere ${F.premio}. Ti aspettiamo!`;
   const o=sheet(`<h3>${esc(c.nome)}</h3><div class="sub">${esc(c.tel)||'senza numero'}</div><div style="margin:14px 0">${fDots(Math.min(c.st,F.n),F.n)}</div><p><b>${c.st}/${F.n} timbri</b>${rd?' · 🎁 premio da consegnare: '+esc(F.premio):''}</p><div class="sub">Consenso comunicazioni commerciali: ${c.cons?'sì':'tolto'}</div>${tel&&c.cons?`<h2 style="font-size:15px;margin:14px 0 6px">✉️ Messaggio al cliente</h2><textarea id="fMsg" rows="5" style="width:100%">${esc(dflt)}</textarea><div style="display:flex;gap:8px;margin-top:8px"><button class="btn" style="flex:1" id="fSms">SMS</button><button class="btn o" style="flex:1" id="fWa">WhatsApp</button></div>`:`<div class="sub" style="margin-top:12px">${tel?'Il cliente non ha dato il consenso: non si possono mandare messaggi.':'Manca il numero di telefono.'}</div>`}<button class="btn o w" style="margin-top:10px" id="fClose">Chiudi</button>`);
   $('#fClose').onclick=()=>o.remove();const mk=ch=>()=>{const t=$('#fMsg').value.trim();if(!t)return;sendOne({tel:c.tel},t,ch,null)};const sb=$('#fSms');if(sb){sb.onclick=mk('sms');$('#fWa').onclick=mk('wa')}})}
+
+
+const ORDST={daordinare:'Da ordinare',ordinato:'Ordinato',arrivato:'Arrivato: da ritirare',consegnato:'Consegnato'};
+const ordDp=x=>Math.max(0,(Number(x.pr)||0)-(Number(x.ac)||0));
+const ordMsg=x=>{const n=String(x.n||'').split(' ')[0].toLowerCase().replace(/^./,c=>c.toUpperCase()),dp=ordDp(x);return `Buongiorno ${n}, il tuo ordine da Novatech (${x.p}${x.q>1?' ×'+x.q:''}) è arrivato! 📦 Puoi passare a ritirarlo${dp>0?' (da saldare: '+eur(dp)+')':''}. Siamo aperti lun–ven 9:30–12:30 e 15:00–18:30. A presto!`};
+let oq='';
+function vOrd(m){
+ if(!D.ord){m.insertAdjacentHTML('beforeend','<div class="card"><div class="empty">Nessun dato sugli ordini. Rigenera il file del telefono dal gestionale.</div></div>');return}
+ const q=oq.trim().toLowerCase(),dq=q.replace(/\D/g,''),L=D.ord.filter(x=>!q||String(x.n).toLowerCase().includes(q)||String(x.p).toLowerCase().includes(q)||String(x.f).toLowerCase().includes(q)||(dq.length>=3&&String(x.t).replace(/\D/g,'').includes(dq)));
+ const sec=(t,st)=>{const l=L.filter(x=>x.st===st).sort((a,b)=>String(b.d).localeCompare(String(a.d)));return `<div class="card"><h2>${t} <span class="pill ${st==='arrivato'&&l.length?'a':'m'}">${l.length}</span></h2>${l.length?l.map(x=>`<div class="row" data-oid="${esc(x.id)}"><div class="x"><b>${esc(x.n)}</b><span class="sub">${esc(x.p)}${x.q>1?' ×'+x.q:''} · ${fmtD(x.d)}${x.pr?' · da pagare '+eur(ordDp(x)):''}${x.tf?' · TIM Fin':''} ${st==='arrivato'?sentTxt('o|'+x.id):''}</span></div>${st==='arrivato'&&x.t?`<button class="btn s ${isSent('o|'+x.id)?'o':''}" data-oav="${esc(x.id)}">${isSent('o|'+x.id)?'Reinvia':'Avvisa'}</button>`:'<span class="sub">›</span>'}</div>`).join(''):'<div class="empty">Nessuno.</div>'}</div>`};
+ m.insertAdjacentHTML('beforeend',`<input id="oq" placeholder="Cerca cliente, prodotto, numero" value="${esc(oq)}" style="margin-bottom:10px"><div class="sub" style="margin:0 2px 8px">Solo consultazione: gli ordini si inseriscono e si aggiornano dal gestionale.</div>${sec('✅ Arrivati da ritirare','arrivato')}${sec('🛒 Da ordinare','daordinare')}${sec('🚚 Ordinati, in arrivo','ordinato')}${sec('📦 Consegnati (ultimi 30 giorni)','consegnato')}`);
+ const e=$('#oq');e.oninput=()=>{oq=e.value;clearTimeout(vOrd.tm);vOrd.tm=setTimeout(()=>{draw();const x=$('#oq');x.focus();x.setSelectionRange(x.value.length,x.value.length)},250)};
+ m.querySelectorAll('[data-oav]').forEach(b=>b.onclick=ev=>{ev.stopPropagation();const x=D.ord.find(v=>v.id===b.dataset.oav);if(x&&sendOne({tel:x.t},ordMsg(x),'sms','o|'+x.id))setTimeout(draw,500)});
+ m.querySelectorAll('[data-oid]').forEach(r=>r.onclick=()=>{const x=D.ord.find(v=>v.id===r.dataset.oid);if(!x)return;const tel=normTel(x.t);
+  const o=sheet(`<h3>${esc(x.n)}</h3><div class="sub">${esc(x.t)||'senza numero'}</div><p style="margin:12px 0 4px"><b>${esc(x.p)}${x.q>1?' ×'+x.q:''}</b></p><div class="sub">Stato: <b>${esc(ORDST[x.st]||x.st)}</b> · ordinato il ${fmtD(x.d)}${x.da?' · arrivato il '+fmtD(x.da):''}</div>${x.f?`<div class="sub">Fornitore: ${esc(x.f)}</div>`:''}${x.pr?`<div class="sub">Prezzo ${eur(x.pr)} · acconto ${eur(x.ac)} · <b>da pagare ${eur(ordDp(x))}</b></div>`:''}${x.tf?`<div class="sub">📱 TIM Fin${x.tf==='2'?' Pack 2x1':''}</div>`:''}${x.nt?`<div class="sub" style="margin-top:6px">${esc(x.nt)}</div>`:''}${tel?`<div style="display:flex;gap:8px;margin:14px 0"><a class="btn o" style="flex:1;text-align:center;text-decoration:none" href="tel:${tel}">📞 Chiama</a>${x.st==='arrivato'?'<button class="btn" style="flex:1" id="oSms">✉️ Avvisa</button>':''}</div>`:''}<button class="btn o w" id="oX">Chiudi</button>`);
+  $('#oX').onclick=()=>o.remove();const sb=$('#oSms');if(sb)sb.onclick=()=>{if(sendOne({tel:x.t},ordMsg(x),'sms','o|'+x.id)){o.remove();setTimeout(draw,500)}}})}
 
 function vRip(m){
  const g=(st)=>D.rip.filter(x=>x.st===st),sec=(t,l,btn)=>`<div class="card"><h2>${t} <span class="pill m">${l.length}</span></h2>${l.length?l.map(x=>{const k='r|'+x.id+'|'+x.pronto;return `<div class="row"><div class="x"><b>${esc(x.n)} · ${esc(x.disp)}</b><span class="sub">${esc(x.guasto)} · ${fmtD(x.data)}${x.prezzo?' · '+eur(x.prezzo):''} ${btn?sentTxt(k):''}</span></div>${btn&&x.t?`<button class="btn s ${isSent(k)?'o':''}" data-act="rip" data-id="${esc(x.id)}">${isSent(k)?'Reinvia':'Avvisa'}</button>`:''}</div>`}).join(''):'<div class="empty">Nessuna.</div>'}</div>`;
