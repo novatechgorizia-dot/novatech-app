@@ -99,7 +99,7 @@ const b2u=t=>Uint8Array.from(atob(t),c=>c.charCodeAt(0));
 async function decrypt(text,pw){const o=JSON.parse(text);if(!o||!o.__enc)throw Error('File non valido');const m=await crypto.subtle.importKey('raw',new TextEncoder().encode(pw),'PBKDF2',false,['deriveKey']);const key=await crypto.subtle.deriveKey({name:'PBKDF2',salt:b2u(o.salt),iterations:o.iter||250000,hash:'SHA-256'},m,{name:'AES-GCM',length:256},false,['decrypt']);const pl=await crypto.subtle.decrypt({name:'AES-GCM',iv:b2u(o.iv)},key,b2u(o.ct));return JSON.parse(new TextDecoder().decode(pl))}
 
 /* ---------- stato ---------- */
-let D=null,tab='oggi',locked=true,msg={tipo:null,sel:{},text:'',mode:'uno',ch:'sms',q:'',manual:''},cq='',queue=null,hiddenAt=0;
+let PW='',D=null,tab='oggi',locked=true,msg={tipo:null,sel:{},text:'',mode:'uno',ch:'sms',q:'',manual:''},cq='',queue=null,hiddenAt=0;
 const sent=()=>LS.get('nt_sent',{});
 function markSent(key){const s=sent();s[key]=Date.now();LS.set('nt_sent',s)}
 const isSent=key=>sent()[key];
@@ -129,16 +129,30 @@ function waHref(tel,body){return 'https://wa.me/'+tel.replace(/\D/g,'')+'?text='
 function openLink(h){const a=document.createElement('a');a.href=h;a.target='_blank';a.rel='noopener';document.body.appendChild(a);a.click();a.remove()}
 function sendOne(r,text,ch,key){const tel=normTel(r.tel);if(!tel){toast('Manca un numero valido');return false}if(key)markSent(key);if(ch==='wa')openLink(waHref(tel,text));else location.href=smsHref([tel],text);return true}
 
+/* ---------- aggiornamento automatico dal sito ---------- */
+let syncAt=0;
+async function fetchRemote(){const r=await fetch('Novatech-telefono.dat?t='+Date.now(),{cache:'no-store'});if(!r.ok)throw Error('no '+r.status);return await r.text()}
+async function autoSync(manual){
+ if(!PW||locked)return;if(!manual&&Date.now()-syncAt<60000)return;syncAt=Date.now();
+ try{const t=await fetchRemote();if(t===LS.raw('nt_enc')){if(manual)toast('Già aggiornato');return}
+  const n=await decrypt(t,PW);
+  if(!D||new Date(n.at)>new Date(D.at)){LS.setRaw('nt_enc',t);LS.set('nt_file',{name:'automatico',at:Date.now()});D=n;if(!queue&&!document.getElementById('sov'))draw();toast('Dati aggiornati dal gestionale')}
+  else if(manual)toast('Già aggiornato')}
+ catch(e){if(manual)toast('Non riesco ad aggiornare ora (serve internet, e il gestionale deve aver inviato i dati)')}}
+async function firstSync(){const pw=$('#pw2').value;if(!pw){$('#er').textContent='Scrivi la password';return}$('#er').textContent='Scarico i dati…';
+ try{const t=await fetchRemote();const o=JSON.parse(t);if(!o.__enc)throw 0;await decrypt(t,pw);LS.setRaw('nt_enc',t);LS.set('nt_file',{name:'automatico',at:Date.now()});D=await decrypt(t,pw);PW=pw;locked=false;tab='oggi';draw()}
+ catch(e){$('#er').textContent='Non riesco: controlla la password e che il gestionale abbia già inviato i dati.'}}
+
 /* ---------- schermata blocco ---------- */
 function showLock(err){
  locked=true;D=null;queue=null;
  const has=!!LS.raw('nt_enc');
  $('#app').innerHTML=`<div class="lock"><div class="card"><h1>Novatech</h1><div class="sub" style="margin-bottom:14px">${has?'Inserisci la password per aprire i dati.':'Prima volta: carica il file dei dati creato dal gestionale (Novatech-telefono.dat).'}</div>
- ${has?`<input id="pw" type="password" placeholder="Password" autocomplete="current-password" enterkeyhint="go"><div class="err" id="er">${esc(err||'')}</div><button class="btn w" id="go">Apri</button><div style="height:12px"></div><button class="btn o w" id="newf">Carica un file nuovo</button>`:`<div class="err" id="er">${esc(err||'')}</div><button class="btn w" id="newf">Scegli il file</button>`}
+ ${has?`<input id="pw" type="password" placeholder="Password" autocomplete="current-password" enterkeyhint="go"><div class="err" id="er">${esc(err||'')}</div><button class="btn w" id="go">Apri</button><div style="height:12px"></div><button class="btn o w" id="newf">Carica un file nuovo</button>`:`<input id="pw2" type="password" placeholder="Password del gestionale" autocomplete="current-password"><div class="err" id="er">${esc(err||'')}</div><button class="btn w" id="auto1">Scarica i dati in automatico</button><div style="height:12px"></div><button class="btn o w" id="newf">Oppure scegli il file a mano</button>`}
  <input id="fl" type="file" style="display:none"></div></div>`;
- const fl=$('#fl');$('#newf').onclick=()=>fl.click();
+ const fl=$('#fl');$('#newf').onclick=()=>fl.click();if(!has){$('#auto1').onclick=firstSync;$('#pw2').onkeydown=e=>{if(e.key==='Enter')firstSync()}}
  fl.onchange=async()=>{const f=fl.files[0];if(!f)return;const t=await f.text();try{const o=JSON.parse(t);if(!o.__enc)throw 0;LS.setRaw('nt_enc',t);LS.set('nt_file',{name:f.name,at:Date.now()});showLock('')}catch(e){$('#er').textContent='Questo file non è quello giusto.'}};
- if(has){const go=async()=>{const pw=$('#pw').value;if(!pw)return;$('#go').disabled=true;$('#er').textContent='Controllo…';try{D=await decrypt(LS.raw('nt_enc'),pw);locked=false;tab='oggi';draw()}catch(e){await new Promise(r=>setTimeout(r,800));showLock('Password errata')}};$('#go').onclick=go;$('#pw').onkeydown=e=>{if(e.key==='Enter')go()};if(!err)setTimeout(()=>$('#pw')&&$('#pw').focus(),100)}
+ if(has){const go=async()=>{const pw=$('#pw').value;if(!pw)return;$('#go').disabled=true;$('#er').textContent='Controllo…';try{D=await decrypt(LS.raw('nt_enc'),pw);PW=pw;locked=false;tab='oggi';draw();autoSync(false)}catch(e){await new Promise(r=>setTimeout(r,800));showLock('Password errata')}};$('#go').onclick=go;$('#pw').onkeydown=e=>{if(e.key==='Enter')go()};if(!err)setTimeout(()=>$('#pw')&&$('#pw').focus(),100)}
 }
 
 /* ---------- disegno ---------- */
@@ -277,20 +291,22 @@ function bind(m){m.querySelectorAll('[data-act]').forEach(b=>b.onclick=()=>{cons
 function settings(){
  const f=LS.get('nt_file',null);
  const o=sheet(`<h3>Impostazioni</h3><div class="sub">File dati: ${f?esc(f.name)+' · caricato il '+fmtD(isoOf(new Date(f.at))):'—'}</div>
- <button class="btn w" style="margin-top:12px" id="sUp">Aggiorna dati (scegli il file)</button><input id="sFl" type="file" style="display:none">
+ <button class="btn w" style="margin-top:12px" id="sNow">🔄 Aggiorna ora dal gestionale</button><div class="sub" style="margin-top:4px">Si aggiorna anche da solo quando apri l’app.</div>
+ <button class="btn o w" style="margin-top:12px" id="sUp">Aggiorna dati a mano (scegli il file)</button><input id="sFl" type="file" style="display:none">
  <h2 style="font-size:15px;margin:18px 0 4px">Modelli dei messaggi</h2><div class="sub">Qui cambi i testi che compaiono già pronti. Usa {nome}, {offerta}, {dispositivo}, {importo}, {ricevuta}.</div>
  ${TIPI.map(([k,i,n])=>`<div class="sub" style="margin:10px 0 4px"><b>${i} ${n}</b></div><textarea data-tp2="${k}" style="min-height:90px">${esc(tpl(k))}</textarea>`).join('')}
  <button class="btn w" style="margin-top:12px" id="sSave">Salva modelli</button><button class="btn o w" style="margin-top:10px" id="sRes">Ripristina tutti i testi originali</button>
  <button class="btn o w" style="margin-top:10px" id="sX">Chiudi</button>
  <div class="sub" style="margin-top:14px">L’app si blocca da sola dopo 5 minuti che non la usi.</div>`);
  $('#sX').onclick=()=>o.remove();
+ $('#sNow').onclick=()=>{o.remove();autoSync(true)};
  $('#sUp').onclick=()=>$('#sFl').click();
  $('#sFl').onchange=async()=>{const fl=$('#sFl').files[0];if(!fl)return;const t=await fl.text();try{const j=JSON.parse(t);if(!j.__enc)throw 0;LS.setRaw('nt_enc',t);LS.set('nt_file',{name:fl.name,at:Date.now()});o.remove();showLock('')}catch(e){toast('Questo file non è quello giusto')}};
  $('#sSave').onclick=()=>{const s={};o.querySelectorAll('[data-tp2]').forEach(t=>{if(t.value.trim()&&t.value!==DEF[t.dataset.tp2])s[t.dataset.tp2]=t.value});LS.set('nt_tpl',s);msg.text=tpl(msg.tipo||'libero');toast('Salvato');o.remove();draw()};
  $('#sRes').onclick=()=>{LS.set('nt_tpl',{});msg.text=tpl(msg.tipo||'libero');toast('Ripristinati');o.remove();draw()}}
 
 /* ---------- blocco automatico ---------- */
-document.addEventListener('visibilitychange',()=>{if(document.hidden)hiddenAt=Date.now();else if(!locked&&hiddenAt&&Date.now()-hiddenAt>5*60*1000)showLock('')});
+document.addEventListener('visibilitychange',()=>{if(document.hidden)hiddenAt=Date.now();else if(!locked&&hiddenAt&&Date.now()-hiddenAt>5*60*1000)showLock('');else if(!locked)autoSync(false)});
 setInterval(()=>{if(!locked&&hiddenAt&&document.hidden&&Date.now()-hiddenAt>5*60*1000)showLock('')},30000);
 if('serviceWorker' in navigator&&location.protocol.startsWith('http'))navigator.serviceWorker.register('sw.js').catch(()=>{});
 showLock('');
